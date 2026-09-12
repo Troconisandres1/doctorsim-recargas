@@ -1,0 +1,1427 @@
+var topup = new dsimTopupObj();
+var temp;
+var topupLoaderTimeoutId = null;
+var TOPUP_LOADER_TIMEOUT_MS = 15000;
+dsSlideUp = function(elem){ elem.slideUp('fast', function(){ elem.css('overflow','visible') }); }
+dsSlideDown = function(elem){ elem.slideDown('fast', function(){ elem.css('overflow','visible') }); }
+clearTopupLoaderTimeout = function() {
+  if (topupLoaderTimeoutId !== null) {
+    clearTimeout(topupLoaderTimeoutId);
+    topupLoaderTimeoutId = null;
+  }
+};
+cleanupTopupModalBackdrops = function() {
+  $('body').removeClass('modal-open');
+  $('.modal-backdrop').remove();
+};
+hideTopupOperatorLoader = function(callback) {
+  clearTopupLoaderTimeout();
+  var $loader = $('#loader_check');
+  var done = false;
+  var finish = function() {
+    if (done) {
+      return;
+    }
+    done = true;
+    cleanupTopupModalBackdrops();
+    if (callback) {
+      callback();
+    }
+  };
+
+  if (!$loader.length) {
+    finish();
+    return;
+  }
+
+  if (!$loader.hasClass('in') && $loader.css('display') === 'none') {
+    finish();
+    return;
+  }
+
+  $loader.one('hidden.bs.modal', function() {
+    finish();
+  });
+
+  setTimeout(function() {
+    if (!done) {
+      $loader.hide();
+      finish();
+    }
+  }, 500);
+
+  $loader.modal('hide');
+};
+showLoader = function(chk,mob){
+  clearTopupLoaderTimeout();
+  if(typeof(mob)==='undefined') mob = false;
+  $("#message_redirect").modal('hide');
+  $("#message_select").modal('hide');
+  switch(chk){
+    case 'chk':
+      $("#loader_check").modal('hide');
+      $("#loader_nauta_check").modal('hide');
+      $('#dimmer').show();
+      // $("#message_checkout").modal({backdrop: 'static', keyboard: false});
+      break;
+    case 'nauta':
+      $("#loader_check").modal('hide');
+      $("#message_checkout").modal('hide');
+      $('#dimmer').hide();
+      $("#loader_nauta_check").modal({backdrop: 'static', keyboard: false});
+      break;
+    default:
+      $("#message_checkout").modal('hide');
+      $('#dimmer').hide();
+      $("#loader_nauta_check").modal('hide');
+      $(".loading_ds_loader_check").show(); $("#found_oper_ok").hide();
+       $("#idn1").show(); $("#idn2").hide();
+      $("#loader_check").modal({backdrop: 'static', keyboard: false});
+      topupLoaderTimeoutId = setTimeout(function() {
+        topupLoaderTimeoutId = null;
+        hideTopupOperatorLoader();
+      }, TOPUP_LOADER_TIMEOUT_MS);
+      break;
+  }
+  // $("#modal_alert").modal({backdrop: 'static', keyboard: false});
+}
+okNoTramo = function(){
+  $(".modal_alert").modal("hide");
+  dsSlideUp($("#no-tramo-form"));
+  dsSlideDown($("#alert-no-tramo"));
+  $("#message_checkout").modal('hide');
+  $('#dimmer').hide();
+}
+okNoPromo = function(){
+  $(".modal_alert").modal("hide");
+  dsSlideUp($("#no-promo-form"));
+  dsSlideDown($("#alert-no-promo"));
+}
+alertOk = function(url,opt,ido, idp, opName, redirectMsg){
+  clearTopupLoaderTimeout();
+  var currentURL = window.location.href;
+  var is_request_mode = currentURL.includes("request");
+
+
+  if(typeof(opt)==='undefined') opt = 'phone';
+  if(typeof(ido)==='undefined') ido = '/img/icon_ok.svg';
+  if(typeof(opName)==='undefined') opName = null;
+  if(typeof(redirectMsg)==='undefined') redirectMsg = null;
+  switch(opt){
+    case 'nauta':
+      $("#loader_check").modal('hide');
+      $("#message_select").modal('hide');
+      $("#loader_nauta_check").modal('hide');
+
+      $("#message_nauta_redirect").modal('show');
+      break;
+    case 'phone':
+      // $("#loader_check").modal('hide');
+      $("#found_oper_ok_img").attr('src','/img/oper/'+ido+'.gif');
+      $(".loading_ds_loader_check").hide(); $("#found_oper_ok").show();
+      $("#idn1").hide();
+      // Use custom redirect message if provided (e.g., Lyca → Llamaya redirect)
+      if (redirectMsg) {
+        $("#idn2").text(redirectMsg);
+      }
+      $("#idn2").show();
+      $("#message_select").modal('hide');
+      $("#loader_nauta_check").modal('hide');
+
+      // $("#message_redirect").modal('show');
+      break;
+  }
+
+  if (is_request_mode) {
+    // Is request mode
+    // Tenemos que mostrar div showSelec
+    // Pasar nombre de oper selecciona, e imagen.
+    $("#sel_tp_op_but").attr('src','/img/oper/' + ido + '.gif');
+    $("#sel_tp_op_but").attr('title','DetectedOperName');
+    $("#sel_tp_op_but").attr('alt','DetectedOperName');
+    $("#sel_tp_op_but").attr('id_oper',ido);
+    $("#operator-sel-name").html(opName);
+    $("#showSelec").show();
+    $("#loader_check").modal('hide');
+    $(".but_sig_next").hide();
+
+    var create_link = document.querySelector('a#request_create_a');
+    var newHref = `javascript:goToRequest(${ido},${idp})`;
+    create_link.href = newHref;
+
+    $('html, body').animate({scrollTop:$("#showSelec").offset().top-80},1000);
+
+  } else {
+    // Modo normal
+    setTimeout(function() {
+      var redirectUrl = String(url).replace(/\.html\/+$/, '.html');
+      location.href = /\/$/.test(redirectUrl) || /\.html$/.test(redirectUrl) ? redirectUrl : redirectUrl + '/';
+    }, 200);
+   }
+}
+alertNok = function(opt){
+  if(typeof(opt)==='undefined') opt = 'phone';
+  $("#message_redirect").modal('hide');
+  $("#loader_nauta_check").modal('hide');
+
+  hideTopupOperatorLoader(function() {
+    var id_container_topup = '';
+    switch(opt){
+      case 'nauta':
+         $("#message_nauta_select").modal('show');
+         id_container_topup = '#container-nauta-form';
+         break;
+      case 'phone':
+        $("#message_select").modal('show');
+        id_container_topup = '#container-oper-recargas';
+        // if ($('#container-oper-recargas').length>0) id_container_topup = '#container-oper-recargas';
+        $(id_container_topup).show();
+        toggleOpList();
+        $('#container-input-svs-toggle-btn').hide();
+        break;
+    }
+    setTimeout(function() {
+      // $(".modal_alert").modal("hide");
+      var $container = $(id_container_topup);
+      if ($container.length && $container.offset()) {
+        $('html, body').animate({scrollTop:$container.offset().top-80},1000);
+      }
+    }, 1);
+  });
+}
+
+dsScroll = function(top){
+  if(typeof(top)==='undefined') top = 0;
+  $('html, body').animate({scrollTop:top},1000);
+}
+chgCountryOpers = function(new_country,sel_country){
+  toggleOpLoader(true);
+  topup.setNewSelCountry(new_country);
+  cleanPromotions();
+  $.get( "/proc/proc_topup.php",
+      topup.getChgCtryOps(),
+      function(data){
+        if(typeof(data.others)!=='undefined' ) other = data.others;
+        if (data.status=='NOK_S' || data.status=='NOK') location.href = location.href;
+        else if(data.status!='NOK_I'){
+          others = data.others
+          topup.updateOpers(data.id,data.opers,false,data.others,data.opers_others);
+        }
+        toggleOpLoader(false);
+        $('#capa-tr-info').hide();
+        if (typeof(data.is_promo)!=='undefined' && data.is_promo == 'S'){
+          drawPromotions(data.promos);
+        }
+       // Focus on the search box if it's visible
+      if($('#searchInput').is(':visible')){
+          $('#searchInput').focus();
+      }
+
+      },
+      "json"
+    );
+}
+cleanPromotions = function(){
+  $('#promotions').empty();
+  $('.promotions').hide();
+}
+drawPromotions = function(promos){
+  var is_data = false;
+  var btn_text_go = "Topup Now!";
+  if (global_lang && global_lang.substring(0,2) == "es") {
+    btn_text_go = "Recarga ya!";
+  }
+  $.each(promos, function(i, value) {
+    var img_data =  '<img notranslate style="margin-bottom:10px;display: float:right;" src="https://www.doctorsim.com/img/oper/'+value.url_imagen+'" width="60" height="60" title="'+value.name+'" alt="'+value.name+'"></img>';
+    if (value.id_operador == 0) {
+      img_data = '<span class="lis_cur flg_pos_pr"><div class="tform_promo nav_flag nflag_div"><div style="margin: 5px;" class="iti__flag iti__'+value.short_country+'"></div></div></span>';
+    }
+
+    // var uslug = topup.resUri+value.url_slug+"/";
+    var promoPath;
+    if (topup.lang === "es-es") {
+      promoPath = "recargar-movil";
+    } else if (topup.lang && topup.lang.substring(0,2) == "es") {
+      promoPath = "recargar-celular";
+    } else {
+      promoPath = "topup-phone";
+    }
+    var uslug = "/"+topup.lang + "/" + topup.newCountry + "/" + promoPath +"/"+value.url_slug +"/";
+
+    uslug = uslug.replace(/\/+$/, '/');
+    if (value.promo_cat == "giftcard") {
+      uslug = uslug.replace(/recargar-movil|recargar-celular|topup-phone/g, "gift-cards");
+    }
+
+    $('#promotions').append(
+      '<div class="panel btn-ds-lightgreyX" style="margin:10px;">' +
+        '<div class="row panel-heading neg-border-top" role="tab" id="headingPromo'+value.id+'" style="cursor:pointer;">' +
+          '<div class="pl-0 px-sm-4 col-2 col-sm-2 promo-tog collapsed" role="button" data-toggle="collapse" data-parent="#accordion" href="#collapsePromo'+value.id+'" aria-expanded="false" aria-controls="collapseAria'+value.id+'">' +
+           img_data +
+            '</div>' +
+            '<div class="col-8 col-sm-9 pnamee collapsed text-left" role="button" data-toggle="collapse" data-parent="#accordion" href="#collapsePromo'+value.id+'" aria-expanded="false" aria-controls="collapseAria'+value.id+'">' +
+            '<div isolate data-localize="topup_promo" class="text-bluegrey "><strong notranslate>'+value.name_oper_display+'</strong><strong isolate>'+value.name_pais_display+'</strong></div>' +
+            '<div isolate data-localize="topup_promo">'+value.mini_text+' - <a href="'+uslug+'"  class="loading " >'+btn_text_go+' </a></div>'+
+            '</div>' +
+            '<div isolate class="col-2 col-sm-1 collapsed text-left" role="button" data-toggle="collapse" data-parent="#accordion" href="#collapsePromo'+value.id+'" aria-expanded="false" aria-controls="collapseAria'+value.id+'">' +
+            '<i class="fa fa-angle-down" style="float: right;margin: 20px;font-size: 20px;font-weight: 700;"></i>' +
+            '</div>' +
+          '</div>' +
+          '<div id="collapsePromo'+value.id+'" class="panel-collapse collapse" role="tabpanel" aria-labelledby="headingPromo'+value.id+'">' +
+            '<div isolate data-localize="topup_promo" class="panel-body pnamee">' +
+              '<hr class="hr60w">' +
+              value.text +
+            '</div>' +
+
+             '<div isolate data-localize="topup_promo" class="panel-body pnamee">'+
+
+                  '<a href="/'+uslug+'" id="form-submit-promo" class=" btn btn-next loading " data-style="slide-left" data-size="l" title="" style=" display: block;width: 250px; margin: 0 auto;">'+btn_text_go+' </a>'+
+                '</div>'+
+          '</div>' +
+        '</div>'
+      );
+
+    is_data = true;
+  });
+  if (is_data){
+    $('.promotions').show();
+    // hacemos scroll para reajustar la muestra.
+    // solo en landing de pais oper
+    var sel_ope = topup.getSelOperId();
+    // if (sel_ope !== undefined && sel_ope > 0 ) {
+      // if ($(window).width() > 767) {
+      //   $("html, body").animate({ scrollTop: $('.promotions').offset().top-100}, "slow");
+      // } else {
+      //   $("html, body").animate({ scrollTop: $('.promotions').offset().top-50}, "slow");
+      // }
+    // }
+  }
+}
+
+loadIniPromos = function() {
+  if (typeof(init_promo_server_load)!=='undefined' &&
+    init_promo_server_load == 1) {
+    init_promo_server_load = 0;
+    return;
+  }
+  cleanPromotions();
+  $.post( "/proc/proc_topup.php",
+    topup.getLoadIniPromos(),
+    function(data){
+      if (
+        typeof(data)!=='undefined' &&
+        data !== null &&
+        typeof(data.is_promo)!=='undefined' &&
+        data.is_promo == 'S'
+      ){
+        drawPromotions(data.promos);
+      }
+    },
+    "json"
+  );
+}
+var pop_fetch_oper_running = false;
+var xhr_pop ;
+chgCountryOpersNew = function(new_country,sel_country,initLoad, base_country){
+  if (pop_fetch_oper_running) {
+    xhr_pop.abort();
+    // Continue
+  }
+  pop_fetch_oper_running = true;
+
+
+  $(".panel-collapse").collapse("hide");
+  // topupfv.resetForm();
+  ShowInputServicesTypeButton(new_country, false);
+  if(typeof(check_tool)=='undefined') check_tool = false;
+  topup.setNewSelCountry(new_country);
+  topup.setOrigUrlCountryId(base_country);
+  cleanPromotions();
+  xhr_pop = $.get(
+    "/proc/proc_topup.php",
+    topup.getChgCtryOps(),
+    function(data){
+      if(typeof(data.others)!=='undefined' ) other = data.others;
+      if (data.status=='NOK_S' || data.status=='NOK') location.href = location.href;
+      else if(data.status!='NOK_I'){
+        others = data.others
+        topup.updateOpers(data.id,data.opers,false,check_tool,data.others,data.opers_others);
+      }
+      //toggleOpLoader(false);
+      if(typeof(data.name)!=='undefined' && data.name!=''){
+        topup.setCountryTxt(data.name);
+      }
+      $('#capa-tr-info').hide();
+      $('#capa-op-info').hide();
+      // if ($('#container-oper-recargas').length>0) $('#container-oper-recargas').hide();
+      if (typeof iti !== 'undefined' && iti && typeof iti.getChgType === 'function') {
+        if (!initLoad && (iti.getChgType() === 0)) {
+          $('#phone').val('');
+        }
+        // If change of country initiated by favorite, do not clear edit box
+        if (iti.getChgType() === 1) {
+          iti.setChgType(0);
+        }
+      }
+
+      topup.setSelOperId(false);
+      showCheckMsisdnSubmit();
+      if (typeof(data.is_promo)!=='undefined' && data.is_promo == 'S'){
+        drawPromotions(data.promos);
+      }
+
+    if (pop_fetch_oper_running) {
+      pop_fetch_oper_running = false;
+    }
+
+    },
+    "json"
+  );
+}
+showSpecialInputSvcsForm = function(){
+  hideModif();
+  $("#container-special-service-input-form").show();
+
+  // topup.setIsNauta(true);
+  // $("#label_telf_mobile").html(def_telf_nauta);
+  $("#container-input-svs-toggle-btn-parent").insertAfter("#error_special_service_input_p");
+  $('#container-nauta-form').show();
+  $('#container-input-svs-toggle-btn').show();
+  $('#container-msisdn-form').hide();
+  $("#showSelec").show();
+  // $(".phone-number-holder-row").hide();
+  // $('#container-oper-recargas').hide();
+  // if (topup.getSelOperId() == topup.orig_oper_id ||
+  //     (topup.getSelOperId() == false &&
+  //     topup.country == topup.getSelCountryId())) {
+  if (false){
+    // Local
+    checkTool(topup.getSelOperId(),topup.getSelCountryId());
+  } else {
+    // Alien Service Input to Url
+    $("#container-special-service-input-form").hide();
+    $("#showSelec").hide();
+    $("#container-oper-recargas").show();
+    $("html, body").animate({ scrollTop: $('#title_others2').offset().top-400}, 1000);
+    history.pushState({ OtherOperdivShown: true }, '');
+  }
+  $("#t_num_rec").hide();
+
+}
+showMsisdnForm = function(){
+  $("#container-special-service-input-form").hide();
+  $("#container-oper-recargas").hide();
+
+  $("#label_telf_mobile").html(def_telf_mobile);
+  $("#container-input-svs-toggle-btn-parent").insertAfter("#error_p");
+  $('#container-msisdn-form').show();
+  $('#container-nauta-form').hide();
+  $(".phone-number-holder-row").show();
+  $("#t_num_rec").show();
+  ShowInputServicesTypeButton(iti.getSelectedCountryData().iso2, false);
+  $('#phone').keyup();
+  if(typeof(page) !== 'undefined' && page == 'o')
+  {
+    resetNautaInput();
+  }
+}
+ShowInputServicesTypeButton = function(iso_country, special_service_input_is_special_service){
+    // VE and CU for now
+    if(typeof(special_service_input_is_special_service)=='undefined') special_service_input_is_special_service = false;
+
+    if(iso_country=='cu' || iso_country=='ve'){
+
+        if (!special_service_input_is_special_service) {
+          $('#container-input-svs-toggle-btn').show();
+          // disable
+          $('#inpt-svc-opt-cel').prop('disabled', true);
+
+          var count = Object.keys(special_service_input[iso_country]).length;
+          var firstKey = Object.keys(special_service_input[iso_country])[0];
+          var text = special_service_input[iso_country][firstKey]['toggle_switch_type_text_en'];
+          if (global_lang && global_lang.substring(0,2) == "es") {
+             text = special_service_input[iso_country][firstKey]['toggle_switch_type_text'];
+          }
+          if(count > 1){
+              if (global_lang && global_lang.substring(0,2) == "es") {
+                text = text + " y Otros Servicios >";
+              } else {
+                text = text + " and Other Services >";
+              }
+          } else {
+            text = text + " >";
+          }
+          $("#inpt-svc-opt-others-text").html(text);
+          $("#inpt-svc-opt-others").prop('disabled', false);
+          $("#container-input-svs-toggle-btn-parent").insertAfter("#error_p");
+        } else {
+          // reset
+          $("#container-input-svs-toggle-btn-parent").insertAfter("#error_special_service_input_p");
+          $('#container-input-svs-toggle-btn').show();
+          // disable
+          $('#inpt-svc-opt-cel').prop('disabled', false);
+          $("#inpt-svc-opt-others").prop('disabled', true);
+        }
+    }else{
+        $('#container-input-svs-toggle-btn').hide();
+    }
+}
+
+
+
+toggleOpLoader = function(show){
+  if(show){
+    $(".progress-bar").width('0%');
+    $("#progress-check").show();
+    $("#container-oper-recargas").slideUp();
+    $(".progress-bar").animate({ width: "50%" },1000);
+  }
+  else{
+    $(".progress-bar").animate(
+      { width: "100%" },
+      function(){
+        setTimeout(function(){
+          $("#container-oper-recargas").slideDown();
+          $("#progress-check").hide();
+          toggleOpList();
+        },1000);
+      });
+  }
+}
+var pop_tramos_running = false;
+var xhr ;
+populateTramos = function(pais,oper,curAlt,chk,chk2,msisdn){
+  if (pop_tramos_running) {
+    return;
+  } else {
+    pop_tramos_running = true;
+  }
+  topup.setChk(0);
+  topup.setChk2(0);
+  topup.setMsisdnCh(0);
+  var move = 70;
+  if ($(window).width() > 1200) {
+    move = 150;
+  } else if ($(window).width() > 990) {
+     move = 150;
+  } else if ($(window).width() > 574) {
+    move = 70;
+  }
+  if (!$('#nav-tabContent').is(':visible')) {
+    $("html, body").animate({
+        scrollTop: $('#showSelec').offset().top - move
+    }, "slow");
+  }
+  $("#tr-form").hide(); // clean aviso no dispo
+  $("#alert-no-tramo").hide(); // resto success aviso no dispo
+  $("#no-tramo-form").show(); // reset form
+  $("#lyca-llamaya-redirect").hide(); // hide Lyca redirect banner
+  $("#tr-list").hide();
+  $('#promo-block').hide();
+  // $("#denom-tab").show();
+  $("#tr-load").show();
+  if(typeof(chk)!=='undefined' && chk){
+    $('#modal_check .modal-content div').hide();
+    $('#modal_check .modal-content .checking').show();
+    $('#modal_check').modal({backdrop: 'static', keyboard: false});
+    topup.setSelCountryId(pais);
+    topup.setSelOperId(oper);
+    topup.setChk(true);
+  }
+  if(typeof(chk2)!=='undefined' && chk2){
+    topup.setChk2(chk2);
+  }
+  if(typeof(msisdn)!=='undefined' && msisdn && msisdn!=0 && msisdn!=''){
+    topup.setMsisdnCh(msisdn);
+  }
+  var params = topup.getFetchParams();
+  if(typeof(curAlt)!=='undefined' && curAlt!=''){
+    params['curAlt'] = curAlt;
+  }
+  // $(".tab_cl_ck").addClass('disabled');
+
+  // $(".nav-item.nav-link.tab_cl_ck").not(".active").fadeOut();
+
+  params['cv']=1;
+
+  // Preserve the original language for PayPal checkout - do not force to 'en'
+  // The language should be passed as-is to PayPal so the checkout page displays in the correct language
+  // Note: Template display may still use 'en' for non-es languages, but PayPal needs the actual language
+  xhr = $.get(
+    "/proc/fetch_topup.php",
+    params,
+    function(data){
+      // $(".nav-item.nav-link.tab_cl_ck").not(".active").fadeIn();
+      if (chk){
+        $('#modal_check .modal-content .checking').hide();
+        if (data.result=='OK'){
+          $('#modal_check .modal-content .check-ok').show();
+          location.href = data.url;
+        }else{
+          var oTableRequestvar = $('#topups_table_request').DataTable( );
+          oTableRequestvar.ajax.reload();
+          $('#modal_check .modal-content .check-ko').show();
+          setTimeout(function() {
+            $('#modal_check').modal('hide');
+            $('#container-oper-recargas').hide();
+            $("html, body").animate({ scrollTop: $('#table_topup_container').offset().top }, "slow");
+          }, 4000);
+        }
+      }else{
+        $("#tr-load").hide();
+        var hasOpers = typeof(data)!=='undefined' && typeof(data.opers)!=='undefined' && Object.keys(data.opers).length;
+
+        // Lyca ES redirect to Llamaya (Trello #9052)
+        // Note: Lyca ES uses id_o=6931 in fetch_topup API (not database id_operador=18)
+        var isLycaES = (params.id_o == 6931 && params.id_p == 34);
+
+        // For PRO-gated products (pspp=1), the is_pro_user variable may not be set yet
+        // because this CDN-cached response arrives before dsimHydration fires — a race
+        // condition that is especially pronounced in native-app WebViews where the edge
+        // cache is faster than the origin hydration round-trip. Wrap the render decision
+        // in _applyFetchResult and defer it until hydration is ready when needed.
+        var _applyFetchResult = function(isProUser) {
+          var isProBlocked = (data && data.pspp == 1 && !isProUser);
+        if (isLycaES) {
+          // Lyca ES - show redirect message instead of prices or email form
+          $("#tr-load").hide();
+          $("#tr-list").hide();
+          $("#tr-form").hide();
+          $('#lyca-llamaya-redirect').show();
+        } else if(hasOpers && !isProBlocked){
+          // Ensure sticky_price section stays visible
+          var $sticky_price = $('.sticky_price');
+          if ($sticky_price.length > 0) {
+            $sticky_price.show();
+            $sticky_price.css('display', 'block');
+            $('.topup-res-tramo-sel').show();
+            $('.topup-res-tramo-sel').css('display', 'block');
+            $('.topup-res-tramo-sel').css('visibility', 'visible');
+          }
+          
+          topup.setFetch(data);
+          $("#tr-list").show();
+          if ($('#sms_notif:checkbox:checked').length > 0) {
+            $(".sms_notif_text").slideDown();
+          }
+          $('#promo-block').show();
+          topup.drawSections();
+          
+          // After drawSections, ensure sticky price is still visible
+          setTimeout(function() {
+            var $sticky = $('.sticky_price');
+            var $box = $('.topup-res-tramo-sel');
+            if ($sticky.length > 0) {
+              $sticky.show().css({
+                'display': 'block',
+                'visibility': 'visible',
+                'opacity': '1'
+              });
+            }
+            if ($box.length > 0) {
+              $box.show().css({
+                'display': 'block',
+                'visibility': 'visible',
+                'opacity': '1',
+                'background-color': '#fff',
+                'border': '1px solid #197aa6'
+              });
+              
+              // Set up MutationObserver to watch for style changes
+              if (typeof MutationObserver !== 'undefined') {
+                var observer = new MutationObserver(function(mutations) {
+                  mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && (mutation.attributeName === 'style' || mutation.attributeName === 'class')) {
+                      var display = $box.css('display');
+                      var visibility = $box.css('visibility');
+                      var opacity = $box.css('opacity');
+                      if (display === 'none' || visibility === 'hidden' || opacity === '0' || $box.height() === 0) {
+                        $box.css({
+                          'display': 'block',
+                          'visibility': 'visible',
+                          'opacity': '1',
+                          'background-color': '#fff',
+                          'border': '1px solid #197aa6',
+                          'min-height': '52px'
+                        });
+                      }
+                    }
+                  });
+                });
+                observer.observe($box[0], {
+                  attributes: true,
+                  attributeFilter: ['style', 'class']
+                });
+              }
+            }
+          }, 50);
+          if (oper == false && (typeof(params.id_o)!=='undefined')) {
+            oper = params.id_o;
+          }
+          var id_selected = $("div").find("[idoper='"+oper+"']").find($(".boton-precio-recarga .ribbon2")).parent().attr('top-id');
+          var sel_recom_tram = 0;
+          if (id_selected > 0) {
+            sel_recom_tram = id_selected;
+          }
+          // Trello #9991: Pro carousel deep-link ?r=50 preselects last denomination.
+          var preselectR = null;
+          try {
+            var rMatch = window.location.search.match(/[?&]r=([0-9]+(?:\.[0-9]+)?)/);
+            if (rMatch) {
+              preselectR = parseFloat(rMatch[1]);
+            }
+          } catch (ePre) {}
+          if (preselectR !== null && data && data.opers && oper && data.opers[oper] && data.opers[oper].tr) {
+            var preTr = data.opers[oper].tr;
+            var preI;
+            for (preI = 0; preI < preTr.length; preI++) {
+              var preRv = parseFloat(String(preTr[preI].r || '0').replace(',', ''));
+              if (!isNaN(preRv) && Math.abs(preRv - preselectR) < 0.011) {
+                sel_recom_tram = preI;
+                break;
+              }
+            }
+          }
+          topup.setSelSection(sel_recom_tram);
+          if (preselectR !== null) {
+            var $preBtn = $('#tr-list .boton-precio-recarga[top-id="' + sel_recom_tram + '"]');
+            if ($preBtn.length) {
+              $('#tr-list .boton-precio-recarga').removeClass('active');
+              $preBtn.addClass('active');
+            }
+          }
+          var obj = topup.getSelObject();
+          
+          var price = $('#tr-list .monto-cambio .precio-tramo .price_cost');
+          var div_cost = $('#tr-list .monto-cambio .precio-tramo #div_sel_c');
+          if (div_cost.length === 0) {
+            div_cost = $('.monto-cambio .precio-tramo #div_sel_c');
+          }
+          if (div_cost.length === 0) {
+            div_cost = $('#div_sel_c');
+          }
+          
+          price.empty();
+          if (obj!=false){
+            var price_html = obj.p_a[topup.getCur()]+" <span class='hlp_price_cur_tot'>"+topup.getCur()+'</span>';
+            price.html(price_html);
+            
+            // Also update sticky price section if it exists
+            var sticky_price = $('.sticky_price .monto-cambio .precio-tramo .price_cost');
+            if (sticky_price.length > 0) {
+              sticky_price.html(price_html);
+              
+              // Ensure the container is visible
+              $('.sticky_price').show();
+              $('.topup-res-tramo-sel').show();
+              $('.topup-res-tramo-sel').css({
+                'display': 'block',
+                'visibility': 'visible',
+                'opacity': '1'
+              });
+            }
+          }else{
+            hideModif();
+            topup.modifMsisdnInput('show');
+            
+            // Even if no object, keep sticky price visible
+            $('.sticky_price').show();
+            $('.topup-res-tramo-sel').show();
+          }
+          if (div_cost.length > 0) {
+            div_cost.html(topup.getOthCur());
+          }
+          
+          // Final check - ensure sticky price is visible
+          setTimeout(function() {
+            var $sticky = $('.sticky_price');
+            var $box = $('.topup-res-tramo-sel');
+            
+            if (!$sticky.is(':visible') || !$box.is(':visible')) {
+              $sticky.show().css({'display': 'block', 'visibility': 'visible'});
+              $box.show().css({'display': 'block', 'visibility': 'visible', 'opacity': '1'});
+            }
+            
+            // Force styles again with !important via attr style
+            var currentBoxStyle = $box.attr('style') || '';
+            $box.attr('style', currentBoxStyle + '; display: block !important; visibility: visible !important; opacity: 1 !important; background-color: #fff !important; border: 1px solid #197aa6 !important;');
+            var currentStickyStyle = $sticky.attr('style') || '';
+            $sticky.attr('style', currentStickyStyle + '; display: block !important; visibility: visible !important;');
+          }, 100);
+          
+          // Additional check after a longer delay to catch any late DOM changes
+          setTimeout(function() {
+            var $sticky = $('.sticky_price');
+            var $box = $('.topup-res-tramo-sel');
+            if (!$sticky.is(':visible') || !$box.is(':visible') || $box.height() === 0) {
+              $sticky.show().css({
+                'display': 'block',
+                'visibility': 'visible'
+              });
+              $box.show().css({
+                'display': 'block',
+                'visibility': 'visible',
+                'opacity': '1',
+                'background-color': '#fff',
+                'border': '1px solid #197aa6',
+                'min-height': '52px'
+              });
+            }
+          }, 500);
+        }else{
+          $('#tr-form').show();
+          $("#container-special-service-input-form").hide();
+          $("#container-input-svs-toggle-btn-parent").hide();
+          
+          // Keep sticky price visible even in this case
+          $('.sticky_price').show();
+          $('.topup-res-tramo-sel').show();
+        }
+        }; // end _applyFetchResult
+
+        if (data && data.pspp == 1 && typeof dsimHydration !== 'undefined' && !dsimHydration.getState()) {
+          // PRO-gated product but hydration not yet complete — defer render until we
+          // know the user's PRO status, avoiding the race condition on native WebViews
+          // where the CDN-cached AJAX response arrives before the hydration endpoint.
+          dsimHydration.onReady(function(state) {
+            _applyFetchResult(state && state.auth && state.auth.is_pro ? true : false);
+          });
+        } else {
+          // Non-PRO product OR hydration already done — resolve immediately
+          var _proUser = (typeof dsimHydration !== 'undefined' && dsimHydration.getState())
+            ? dsimHydration.isPro()
+            : is_pro_user;
+          _applyFetchResult(_proUser);
+        }
+
+        delete params['cv'];
+        $.get(
+          "/proc/fetch_topup.php",
+          params,
+          function(data){
+            // Fresh data sync: the non-cv call hits origin and populates the session.
+            // If Cloudflare served stale data for cv=1, the browser state and session
+            // would be out of sync, causing "wrong token" errors at checkout.
+            // We update the browser state here to match the fresh session data.
+            var hasOpers = typeof(data) !== 'undefined' && typeof(data.opers) !== 'undefined'
+                           && Object.keys(data.opers).length;
+
+            if (hasOpers && topup.checkFetch()) {
+              var oldOper = topup.fetch.opers[topup.selOId];
+              var newOper = data.opers[topup.selOId];
+              var currentInx = topup.getSelSection();
+              var dataChanged = false;
+
+              // Quick comparison: tier count + send/receive/tool values
+              try {
+                if (!oldOper || !newOper || oldOper.tr.length !== newOper.tr.length) {
+                  dataChanged = true;
+                } else {
+                  for (var j = 0; j < oldOper.tr.length; j++) {
+                    if (oldOper.tr[j].s !== newOper.tr[j].s
+                        || oldOper.tr[j].r !== newOper.tr[j].r
+                        || oldOper.tr[j].t !== newOper.tr[j].t) {
+                      dataChanged = true;
+                      break;
+                    }
+                  }
+                }
+              } catch(e) {
+                dataChanged = true;
+              }
+
+              // Always update internal data to match the session
+              topup.setFetch(data);
+
+              if (dataChanged) {
+                // Re-render pricing tier buttons
+                topup.drawSections();
+
+                // Re-apply user's selection (or fall back to recommended/first)
+                var newTr = data.opers[topup.selOId] ? data.opers[topup.selOId].tr : null;
+                if (newTr && newTr[currentInx]) {
+                  var selBtn = $(topup.getTabName() + ' .boton-precio-recarga[top-id="' + currentInx + '"]');
+                  if (selBtn.length > 0) {
+                    selBtn.addClass('active');
+                    topup.setSelSection(currentInx);
+                  }
+                } else {
+                  // Selected index no longer exists - pick recommended or first
+                  var recBtn = $(topup.getTabName() + ' .boton-precio-recarga .ribbon2').parent();
+                  if (recBtn.length > 0) {
+                    recBtn.addClass('active');
+                    topup.setSelSection(recBtn.attr('top-id'));
+                  } else {
+                    var firstBtn = $(topup.getTabName() + ' .boton-precio-recarga').first();
+                    if (firstBtn.length > 0) {
+                      firstBtn.addClass('active');
+                      topup.setSelSection(firstBtn.attr('top-id'));
+                    }
+                  }
+                }
+
+                // Update checkout params and all price displays
+                drawSelection();
+              } else {
+                // Data unchanged - silently refresh checkout params from fresh data
+                topup.getSelObject();
+              }
+            }
+
+            // Keep existing sticky price visibility (runs regardless)
+            setTimeout(function() {
+              var $sticky = $('.sticky_price');
+              var $box = $('.topup-res-tramo-sel');
+              if ($sticky.length > 0 && $box.length > 0) {
+                $sticky.show().css({
+                  'display': 'block',
+                  'visibility': 'visible'
+                });
+                $box.show().css({
+                  'display': 'block',
+                  'visibility': 'visible',
+                  'opacity': '1',
+                  'background-color': '#fff',
+                  'border': '1px solid #197aa6'
+                });
+              }
+            }, 50);
+          },
+          "json"
+        );
+      }
+
+      if (pop_tramos_running) {
+        pop_tramos_running = false;
+      }
+      // var uri_h = topup.getUriHash();
+      // console.log(uri_h);
+      // window.location.hash = "#internet";
+    },
+    "json"
+  );
+}
+showWithMsisdn = function(){
+  $('#input-capa-op-info h2').removeClass('text-28 text-center').addClass('text-15');
+  $('#phone').removeClass('input-checkimei-blue').addClass('input-checkimei-blue2');
+  $('#input-capa-op-info br').hide();
+  $('#form-submit').hide();
+  $('#form-capa-op-info').attr("css","");
+  $('#form-capa-op-info').attr("style","");
+  $('#title-capa-op-info').show();
+  $('#capa-op-info').show();
+  $('#capa-tr-info').show();
+}
+showCheckMsisdnSubmit = function(){
+  $('#phone').removeClass('input-checkimei-blue2').addClass('input-checkimei-blue');
+  // $('#form-submit').show();
+  $('#form-submit').css('display', 'block');
+}
+showWithNauta = function(){
+  $('#input-capa-nauta-info h2').removeClass('text-28 text-center').addClass('text-15');
+  $('#nauta_email').removeClass('input-checkimei-blue').addClass('input-checkimei-blue2');
+  $('#input-capa-nauta-info br').hide();
+  $('#nauta-form-submit').hide();
+  $('#form-capa-nauta-info').attr("css","");
+  $('#form-capa-nauta-info').attr("style","");
+  $('#title-capa-nauta-info').show();
+  if ($('#container-nauta-form').is(':visible')) {
+    $('#inpt-svc-opt-others').prop('disabled', true);
+    $('#inpt-svc-opt-cel').prop('disabled', false);
+  } else if (topup.getSelCountryId() == "1944") {
+    $('#inpt-svc-opt-others').prop('disabled', false);
+    $('#inpt-svc-opt-cel').prop('disabled', true);
+      $('#container-input-svs-toggle-btn').show()
+  }
+  $('#container-input-svs-toggle-btn').show();
+  $('#capa-tr-info').show();
+}
+showCheckNautaSubmit = function(){
+  $('#nauta_email').removeClass('input-checkimei-blue2').addClass('input-checkimei-blue');
+  $('#nauta-form-submit').show();
+}
+hideModif = function(){
+  // if ($('#container-oper-recargas').length>0) $('#container-oper-recargas').hide();
+  if ($('#showSelec').length>0) $('#showSelec').hide();
+  if ($('#container-special-service-input-form').length>0) $('#container-special-service-input-form').hide();
+  if ($('#tr-list').length>0) $('#tr-list').hide();
+  if ($('#promo-block').length>0) $('#promo-block').hide();
+  if ($('#tr-form').length>0) $('#tr-form').hide();
+  if ($('#tr-load').length>0) $('#tr-load').hide();
+  if ($('#denom-tab').length>0) $('#denom-tab').hide();
+  if ($('#container-nauta-form').is(':visible')){
+    $('#inpt-svc-opt-others').prop('disabled', true);
+    $('#inpt-svc-opt-cel').prop('disabled', false);
+    $('#container-input-svs-toggle-btn').show();
+  } else if (topup.getSelCountryId() == "1944") {
+    $('#inpt-svc-opt-others').prop('disabled', false);
+    $('#inpt-svc-opt-cel').prop('disabled', true);
+      $('#container-input-svs-toggle-btn').show()
+  }
+  $(".but_sig_next").show();
+}
+drawSelection = function(elem){
+  if(typeof(elem)!=='undefined'){
+    var inx = elem.attr('top-id');
+    elem.addClass('active');
+    topup.setSelSection(inx);
+  }
+  var obj = topup.getSelObject();
+  
+  var price = $('#tr-list .monto-cambio .precio-tramo .price_cost');
+  price.empty();
+  if (obj != false) {
+    var price_html = obj.p_a[topup.getCur()]+" <span class='hlp_price_cur_tot'>"+topup.getCur()+'</span>';
+    price.html(price_html);
+    
+    // Also update sticky price section if it exists
+    var sticky_price = $('.sticky_price .monto-cambio .precio-tramo .price_cost');
+    if (sticky_price.length > 0) {
+      sticky_price.html(price_html);
+      
+      // Ensure visibility
+      $('.sticky_price').show();
+      $('.topup-res-tramo-sel').show().css({
+        'display': 'block',
+        'visibility': 'visible',
+        'opacity': '1'
+      });
+    }
+  }
+  
+  obj_ter = Object.values(topup.fetch.opers)[0].tr;
+  var ite = 0;
+  $.each(obj_ter, function(name, value) {
+    var el = $(value);
+    $("#price_cost_"+ite).html(el[0].p_a[topup.getCur()] + ' <span class="hlp_price_cur">' +topup.getCur()+'</span>');
+     ite++;
+  });
+}
+checkTool = function(idO, idP, chk2, msisdn){
+  if(typeof(chk2)==='undefined') chk2 = 0;
+  if(typeof(msisdn)==='undefined') msisdn = 0;
+  populateTramos(idP, idO, '', chk2, msisdn);
+}
+resetNautaInput = function(){
+  hideModif();
+  topup.modifNautaInput('show');
+}
+loadTabviaHash = function(hash){
+  // console.log(svcTypeToNetwork);
+  if (typeof(svcTypeToNetwork[hash]) !== 'undefined' && svcTypeToNetwork[hash]) {
+    var tab = svcTypeToNetwork[hash];
+    // console.log('tab',tab);
+    if ($('#denom-tab a[href="#type_'+tab+'"]').length) {
+      topup.setUriHash(hash);
+      $('#denom-tab a[href="#type_'+tab+'"]').tab('show');
+      topup.switchTab("type_"+tab);
+      // console.log('switch tab to:',"type_"+tab);
+      checkTool(topup.getSelOperId(),topup.getSelCountryId());
+    }
+  }
+}
+
+const getCookie = name => document.cookie.split(";").map(cookie => cookie.split("=")).find(cookiePair => name == cookiePair[0].trim())?.[1] ? decodeURIComponent(document.cookie.split(";").map(cookie => cookie.split("=")).find(cookiePair => name == cookiePair[0].trim())[1]) : null;
+
+$(document).ready(function(){
+  var localTopupHome = window.location.pathname.indexOf('/colombia-') !== -1 ? '../index.html' : 'index.html';
+
+  $('a.btn-fpt-of').removeClass('btn-fpt-of').removeAttr('fpt').attr('href', 'index.html#');
+  $('a[href^="https://www.doctorsim.com/es/"]').each(function() {
+    var href = this.getAttribute('href');
+    this.setAttribute('href', href.indexOf('/recargar-celular/') !== -1 ? localTopupHome : 'index.html#');
+  });
+  $(document).on('click.localNavigation', 'a[href^="/es/"]', function(event) {
+    event.preventDefault();
+    window.location.href = 'index.html#';
+  });
+
+  // On load 1st time
+  var hash = location.hash.replace(/^#/, '');
+  if (hash) {
+    // console.log ("hash is" ,hash);
+    loadTabviaHash(hash);
+  }
+
+  $(window).on('hashchange',function(){
+    // console.log('hashchange', location.hash.slice(1));
+    loadTabviaHash(location.hash.slice(1));
+  });
+
+  $('#checkout-submit').click(function(){
+    var cb = Math.random()*10000000000000000;
+    $.getJSON('/proc/set_cur.html', {cur: topup.getCur(), cb: cb,ses:1}, function(data) {});
+    $('#tramo-form').submit();
+  });
+  $('#aviso-submit').click(function(){ $('#no-tramo-form').submit(); });
+  $('#aviso-promo-submit').click(function(){ $('#no-promo-form').submit(); });
+  $('#nauta-form-submit').click(function(){ $('#nauta-form').submit(); });
+  $('#form-submit').click(function(){
+    $('#topup-form').submit();
+  });
+  goToRequest = function(operador,country){
+      $('#dimmer').show();
+      setTimeout(function() {
+        $("#dimmer").hide();
+      }, 1500);
+
+      let prefN = iti.getNumber();
+
+      $.post("/proc/proc_topup.php",
+        { 
+          request: true,
+          operador: operador,
+          country: country,
+          name: $("#fullName").val(),
+          phone: prefN.replace(/\+/g, ''),
+          lang : global_lang,
+          requestLang: getCookie('requestlang')
+        },
+        function(data) { // FunciĆ³n de devoluciĆ³n de llamada que se ejecuta cuando se recibe la respuesta
+          if (typeof(data.others) !== 'undefined') other = data.others;
+
+          if (data.status == 'NOK_S' || data.status == 'NOK') {
+            location.href = location.href;
+          } else if (data.status != 'NOK_I') {
+            var topResponse = JSON.parse(data)
+            var cleanURL = topResponse.hash;
+            $("#request_form").hide();
+            $("#request_operator").hide();
+
+
+            var lang = getCookie('requestlang');
+            var finalURL = (lang !== 'es' ? "/" + lang : "") + "/s/" + cleanURL + "/";
+
+
+            var protocol = window.location.protocol;
+            var host = window.location.host;
+            var mainDomain = protocol + "//" + host;
+
+
+            $('#request_link').attr('href', finalURL);
+            $('#expanded_link').text(mainDomain + finalURL);
+
+            var linkURL = mainDomain + finalURL;
+
+            // $("#whatsapp_link").attr("href", "whatsapp://send?text=" + encodeURIComponent(linkURL));
+            var currentHref = $("#whatsapp_link").attr("href");
+            var newHref = currentHref + encodeURIComponent(linkURL);
+            $("#whatsapp_link").attr("href", newHref);
+
+            // $("#mail_link").attr("href", "mailto:?subject=My%20link%20doctorSIM&body=" + encodeURIComponent(linkURL));
+            var currentHrefMail = $("#mail_link").attr("href");
+            var newHref = currentHrefMail + encodeURIComponent(linkURL);
+            let fullName = document.getElementById("fullName").value;
+            newHref = newHref.replace("{nombre}", fullName);
+            newHref = newHref.replace(/<\/nl>/g, "%0A");
+
+            $("#mail_link").attr("href", newHref);
+
+            $("#request_info").show();
+            $('html, body').animate({ scrollTop: $("label_telf_mobile").offset().top}, 500);
+          }
+
+          toggleOpLoader(false);
+          $('#capa-tr-info').hide();
+        },
+        "json" // Tipo de datos esperados de la respuesta
+    );
+  }
+
+$(document).ready(function() {
+    var $requestCopyButton = $('#request_copy');
+
+    if ($requestCopyButton.length) {
+        $requestCopyButton.on('click', function(event) {
+            event.preventDefault();
+            var link = $('#request_link').attr('href');
+            var currentDomain = window.location.origin; 
+            var fullLink = currentDomain + link;
+            var $tempInput = $('<input>');
+            $tempInput.css({
+                position: 'absolute',
+                left: '-9999px'
+            });
+            $tempInput.val(fullLink);
+            $('body').append($tempInput);
+            $tempInput.select();
+            document.execCommand('copy');
+            $tempInput.remove();
+            $('#request_copy_msg').modal('show');
+        });
+    }
+});
+
+
+
+  changeOp = function(operador,country, opName){
+
+    const currentURL = window.location.href;
+    const is_request_mode = currentURL.includes("request");
+
+
+    if(typeof(opt)==='undefined') opt = 'phone';
+    if(typeof(ido)==='undefined') ido = '/img/icon_ok.svg';
+    switch(opt){
+      case 'nauta':
+        $("#loader_check").modal('hide');
+        $("#message_select").modal('hide');
+        $("#loader_nauta_check").modal('hide');
+
+        $("#message_nauta_redirect").modal('show');
+        break;
+      case 'phone':
+        // $("#loader_check").modal('hide');
+        $("#found_oper_ok_img").attr('src','/img/oper/'+operador+'.gif');
+        $(".loading_ds_loader_check").hide(); $("#found_oper_ok").show();
+        $("#idn1").hide(); $("#idn2").show();
+        $("#message_select").modal('hide');
+        $("#loader_nauta_check").modal('hide');
+
+        // $("#message_redirect").modal('show');
+        break;
+    }
+
+    if (is_request_mode) {
+      // Is request mode
+      // Tenemos que mostrar div showSelec
+      // Pasar nombre de oper selecciona, e imagen.
+      $("#sel_tp_op_but").attr('src','/img/oper/' + operador + '.gif');
+      $("#sel_tp_op_but").attr('title','DetectedOperName');
+      $("#sel_tp_op_but").attr('alt','DetectedOperName');
+      $("#sel_tp_op_but").attr('id_oper',operador);
+      $("#operator-sel-name").html(opName);
+      $("#showSelec").show();
+      $("#loader_check").modal('hide');
+      $(".but_sig_next").hide();
+
+      $("#hideshow").show();
+      $("#container-oper-recargas").hide();
+
+      var create_link = document.querySelector('a#request_create_a');
+      var newHref = `javascript:goToRequest(${operador},${country})`;
+      create_link.href = newHref;
+
+      $('html, body').animate({scrollTop:$("#showSelec").offset().top-80},1000);
+      $('html, body').animate({scrollTop: $("#text-select-oper").offset().top}, 500); 
+    } else {
+      // Modo normal
+      setTimeout(function() {
+        location.href = url + '/';
+      }, 200);
+     }
+
+  }
+
+
+  goToPaisOper = function(url,mob){
+    if (init_load_tramos ||
+        init_reca_home_dest_c) {
+      $('#dimmer').show();
+      if (url.substr(-1) != '/') url += '/';
+      location.href = url;
+      return;
+    }
+
+    var $form = $("#topup-form");
+    var shouldValidate = $form.length > 0;
+
+    if (!shouldValidate || $form.valid()) {
+      if (typeof(mob) !== 'undefined' && mob) {
+        $('#dimmer').show();
+        setTimeout(function() {
+          $("#dimmer").hide();
+        }, 5000);
+      }
+      if (url.substr(-1) != '/') url += '/';
+      location.href = url;
+    }
+  }
+  
+  // Intercept clicks on links with data-goto-url attribute to call goToPaisOper
+  $(document).on('click', 'a[data-goto-url]', function(e) {
+    var $link = $(this);
+    var gotoUrl = $link.attr('data-goto-url');
+    var href = $link.attr('href');
+    
+    // Only intercept if href is not a javascript: protocol
+    if (gotoUrl && href && href.indexOf('javascript:') !== 0) {
+      e.preventDefault();
+      goToPaisOper(gotoUrl);
+    }
+  });
+  
+  $.extend({
+    getGo: function(url, params) {
+      document.location = url + '?' + $.param(params);
+    },
+    postGo: function(url, params) {
+      var $form = $("<form>").attr("method", "post").attr("action", url);
+      $.each(params, function(name, value) {
+        if (value != undefined) {
+          $("<input type='hidden'>").attr("name", name).attr("value", value).appendTo($form);
+        }
+      });
+      $form.appendTo("body");
+      $form.submit();
+    }
+  });
+  $.validator.addMethod("validtr", function() {
+    var p = topup.getGoPay();
+    $.each(p, function(name, value) {
+      if (typeof(value) === 'undefined' || value == '') return false;
+    });
+    return true;
+  });
+  $('#phone').keyup(function () {
+    hideModif();
+    topup.modifMsisdnInput('show');
+  });
+  $('#nauta_email').keyup(function () {
+    resetNautaInput();
+  });
+  $('#hideshow').click(function(){
+    // I add the logic to alternate the content of others.
+    
+    const currentURL = window.location.href;
+    const is_request_mode = currentURL.includes("request");
+
+    if(is_request_mode){
+
+    }
+    toggleOpList(true);
+  });
+  // Lyca ES switch operator button (Trello #9052)
+  $('#lyca-switch-operator').click(function(){
+    $('#lyca-llamaya-redirect').hide();
+    toggleOpList(true);
+  });
+  $(document).on('click', '.boton-precio-recarga', function(){
+    $('#tr-list .sections-topup .boton-precio-recarga').removeClass('active');
+    var elem = $(this);
+    drawSelection(elem);
+    // if ($( window ).width() < 502) {
+    //   $("html, body").animate({ scrollTop: $('#tramo-form').offset().top-60}, 1000);
+    // }
+  });
+  $('#inpt-svc-opt-cel').click(function(){
+    $('#inpt-svc-opt-cel').prop('disabled', true);
+    $('#inpt-svc-opt-others').prop('disabled', false);
+    showMsisdnForm();
+  });
+  $('#inpt-svc-opt-others').click(function(){
+    $('#inpt-svc-opt-others').prop('disabled', true);
+    $('#inpt-svc-opt-cel').prop('disabled', false);
+    showSpecialInputSvcsForm();
+  });
+  $(document).on('click', '#oth_cur_div', function(){
+    var cb = Math.random()*10000000000000000;
+    $.getJSON('/proc/set_cur.html', {cur: topup.getAltCur(), cb: cb,ses:1}, function(data) {});
+    populateTramos(false,false,topup.getAltCur());
+  });
+  $('.selectable_cur').click(function() {
+    topup.setCur($(this).attr('cur_div'));
+    var cb = Math.random()*10000000000000000;
+    $.getJSON('/proc/set_cur.html', {cur: topup.getCur(), cb: cb,ses:1}, function(data) {});
+    topup.drawSections();
+    var inx = topup.getSelSection();
+    var elem = false;
+    var elems = $('.boton-precio-recarga');
+    $.each(elems, function(name, value) {
+      var el = $(value);
+      if (el.attr('top-id')==inx){
+        elem = el;
+        return false;
+      }
+    });
+    $(topup.getTabName() + ' .boton-precio-recarga').removeClass('active');
+    $(".lis_cur").show();
+    $("#li_"+topup.getCur()).hide();
+    drawSelection(elem);
+    return;
+  });
+  $('.selectable_cur_2').click(function() {
+    var div_cost = $('#tr-list .monto-cambio .precio-tramo #div_sel_c');
+    if (div_cost.length === 0) {
+      div_cost = $('.monto-cambio .precio-tramo #div_sel_c');
+    }
+    if (div_cost.length === 0) {
+      div_cost = $('#div_sel_c');
+    }
+    var current_cur = div_cost.html();
+    if (!current_cur || current_cur === '') {
+      current_cur = topup.getCur() || 'EUR';
+    }
+    topup.setCur(current_cur);
+    var cb = Math.random()*10000000000000000;
+    $.getJSON('/proc/set_cur.html', {cur: topup.getCur(), cb: cb,ses:1}, function(data) {});
+    div_cost.html(topup.getOthCur());
+    topup.drawSections();
+    var inx = topup.getSelSection();
+
+    // active tab - if tabs visible
+    var tab_id = 3; // default
+    if (typeof service_type_active !== 'undefined' && /^\d+$/.test(service_type_active)) {
+    tab_id = service_type_active;
+    }
+    if ($(".tab_cl_ck.active").is(":visible")) {
+      var active_tab_id = $(".tab_cl_ck.active").attr('id');
+      var tab_id = active_tab_id.match(/\d+/)[0];
+    }
+    var elem = false;
+    var elems = $("#tramos_holder_div_"+tab_id+ " > div > a");
+
+    // var elems = $('.boton-precio-recarga');
+    $.each(elems, function(name, value) {
+      var el = $(value);
+      if (el.attr('top-id')==inx){
+        elem = el;
+        return false;
+      }
+    });
+    $(topup.getTabName() + ' .boton-precio-recarga').removeClass('active');
+    $(".lis_cur").show();
+    $("#li_"+topup.getCur()).hide();
+    drawSelection(elem);
+    return;
+  });
+
+
+  $('#denom-tab a').click(function(e) {
+    if (pop_tramos_running) {
+      pop_tramos_running = false;
+      xhr.abort();
+      // return;
+    }
+    topup.switchTab(this.getAttribute('aria-controls'));
+    checkTool(topup.getSelOperId(),topup.getSelCountryId());
+    var type_sel = this.getAttribute('aria-controls');
+    type_sel_n = type_sel.match(/\d+/)[0];
+    topup.setUriHash(networkToSvcType[type_sel_n]);
+    window.location.hash = networkToSvcType[type_sel_n];
+
+  });
+  // Tab label setter for skeleton on change tab
+  $('.tab_cl_ck').click(function() {
+    var tt = this.getAttribute('aria-controls');
+    var g2 = tt.match(/\d+/)[0];
+    if (g2 > 0) {
+      // Set labels according to type
+      $("#label_cant_mobile_skeleton").html(label_ind[g2]);
+      $("#label_prod_rx_desc_skeleton").html(label_ind_sub[g2]);
+    }
+
+  });
+
+
+  // SMS notif
+  $('#sms_notif').click(function() {
+    if ($('#sms_notif:checkbox:checked').length > 0) {
+      $(".sms_notif_text").slideDown();
+    } else {
+      $(".sms_notif_text").slideUp();
+    }
+  });
+
+
+});

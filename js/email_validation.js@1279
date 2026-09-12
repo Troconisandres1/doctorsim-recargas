@@ -1,0 +1,192 @@
+/**
+ * Email domain blacklist validation helper
+ *
+ * ES5-compatible. No arrow functions, no let/const, no template literals.
+ * Provides dsimCheckEmailDomain() for use with jQuery Validate custom methods.
+ *
+ * Usage:
+ *   dsimCheckEmailDomain(value)         → true if domain is OK, false if blacklisted
+ *   dsimSuggestEmailDomain(value)       → corrected email string or null
+ */
+(function (window) {
+
+    /**
+     * Map of blacklisted domains to their correct counterparts.
+     * Must stay in sync with EmailDomainBlacklist.class.php.
+     */
+    var DOMAIN_BLACKLIST = {
+        // Gmail
+        'gnail.com':    'gmail.com',
+        'gamil.com':    'gmail.com',
+        'gmail.con':    'gmail.com',
+        'gmail.co':     'gmail.com',
+        'gmaill.com':   'gmail.com',
+        'gmial.com':    'gmail.com',
+        'gmai.com':     'gmail.com',
+        'gmaiil.com':   'gmail.com',
+        'gmal.com':     'gmail.com',
+        'gmali.com':    'gmail.com',
+        'gimail.com':   'gmail.com',
+        'gmail.coom':   'gmail.com',
+        'gmail.cm':     'gmail.com',
+        'gmail.ocm':    'gmail.com',
+        'gmaik.com':    'gmail.com',
+        'gmail.om':     'gmail.com',
+        'gmail.comm':   'gmail.com',
+        'gmaii.com':    'gmail.com',
+        'gmaio.com':    'gmail.com',
+        'gmail.net':    'gmail.com',
+        'gmail.org':    'gmail.com',
+        // Hotmail
+        'hotmal.com':   'hotmail.com',
+        'hotmail.con':  'hotmail.com',
+        'hotmail.co':   'hotmail.com',
+        'hotmial.com':  'hotmail.com',
+        'hotmil.com':   'hotmail.com',
+        'homail.com':   'hotmail.com',
+        'hotmaill.com': 'hotmail.com',
+        'hotmail.cm':   'hotmail.com',
+        'hotmail.ocm':  'hotmail.com',
+        'hotmail.cmo':  'hotmail.com',
+        'hotmail.om':   'hotmail.com',
+        'hotamil.com':  'hotmail.com',
+        'hotmail.comm': 'hotmail.com',
+        'htomail.com':  'hotmail.com',
+        // Yahoo
+        'yaho.com':     'yahoo.com',
+        'yahoo.con':    'yahoo.com',
+        'yahoo.co':     'yahoo.com',
+        'yahooo.com':   'yahoo.com',
+        'yaoo.com':     'yahoo.com',
+        'yaoho.com':    'yahoo.com',
+        'yaho.es':      'yahoo.es',
+        'yahoo.cm':     'yahoo.com',
+        'yahoo.ocm':    'yahoo.com',
+        'yahoo.cmo':    'yahoo.com',
+        'yhoo.com':     'yahoo.com',
+        'yahooo.es':    'yahoo.es',
+        // iCloud
+        'icloud.con':   'icloud.com',
+        'iclod.com':    'icloud.com',
+        'icloud.co':    'icloud.com',
+        'icloud.cm':    'icloud.com',
+        'iclould.com':  'icloud.com',
+        // Outlook
+        'outlok.com':   'outlook.com',
+        'outloo.com':   'outlook.com',
+        'outlook.con':  'outlook.com',
+        'outlook.co':   'outlook.com',
+        'outlook.cm':   'outlook.com',
+        'outloook.com': 'outlook.com',
+        'outlookk.com': 'outlook.com',
+        'otulook.com':  'outlook.com',
+        // GMX
+        'gmx.cmo':      'gmx.com',
+        'gmx.con':      'gmx.com',
+        'gmx.co':       'gmx.com',
+        // Live
+        'live.con':     'live.com',
+        'live.co':      'live.com',
+        'liev.com':     'live.com',
+        // Protonmail
+        'protonmail.con': 'protonmail.com',
+        'protonmial.com': 'protonmail.com',
+        // MSN
+        'msn.con':      'msn.com',
+        // Yandex
+        'yandex.con':   'yandex.com',
+        'yandex.cmo':   'yandex.com'
+    };
+
+    /**
+     * Extract domain from an email address.
+     * @param  {string} email
+     * @return {string|null}
+     */
+    function extractDomain(email) {
+        var parts = email.split('@');
+        if (parts.length !== 2 || parts[1] === '') {
+            return null;
+        }
+        return parts[1].toLowerCase();
+    }
+
+    /**
+     * Check whether the email domain is NOT blacklisted.
+     * Returns true if the email is acceptable (domain not in blacklist).
+     * Returns false if the domain is blacklisted (should be rejected).
+     *
+     * @param  {string} email
+     * @return {boolean}
+     */
+    function dsimCheckEmailDomain(email) {
+        var domain = extractDomain(email);
+        if (domain === null) {
+            return true;
+        }
+        return !DOMAIN_BLACKLIST.hasOwnProperty(domain);
+    }
+
+    /**
+     * Return a suggestion for the correct email when the domain is blacklisted.
+     * Returns null if the domain is not blacklisted.
+     *
+     * @param  {string} email
+     * @return {string|null}
+     */
+    function dsimSuggestEmailDomain(email) {
+        var domain = extractDomain(email);
+        if (domain === null || !DOMAIN_BLACKLIST.hasOwnProperty(domain)) {
+            return null;
+        }
+        var parts = email.split('@');
+        return parts[0] + '@' + DOMAIN_BLACKLIST[domain];
+    }
+
+    window.dsimCheckEmailDomain = dsimCheckEmailDomain;
+    window.dsimSuggestEmailDomain = dsimSuggestEmailDomain;
+
+    var styleId = 'dsim-email-hint-styles';
+    if (!document.getElementById(styleId)) {
+        var style = document.createElement('style');
+        style.id = styleId;
+        style.type = 'text/css';
+        style.innerHTML = [
+            '#email-domain-hint, .dsim-email-suggestion {',
+            '  display: none;',
+            '  margin-top: 8px;',
+            '  margin-bottom: 4px;',
+            '  padding: 10px 16px;',
+            '  background: #f0f8ff;',
+            '  border-left: 3px solid #197aa6;',
+            '  border-radius: 0 4px 4px 0;',
+            '  font-size: 13px;',
+            '  line-height: 1.5;',
+            '  color: #444;',
+            '  text-align: center;',
+            '  white-space: nowrap;',
+            '  overflow: hidden;',
+            '  text-overflow: ellipsis;',
+            '}',
+            '#email-domain-hint .dsim-suggestion-link,',
+            '.dsim-email-suggestion .dsim-suggestion-link {',
+            '  color: #197aa6;',
+            '  font-weight: 600;',
+            '  text-decoration: none;',
+            '  border-bottom: 1px solid rgba(25, 122, 166, 0.4);',
+            '  cursor: pointer;',
+            '  transition: background 0.15s, color 0.15s;',
+            '}',
+            '#email-domain-hint .dsim-suggestion-link:hover,',
+            '.dsim-email-suggestion .dsim-suggestion-link:hover {',
+            '  background: #197aa6;',
+            '  color: #fff;',
+            '  border-bottom-color: transparent;',
+            '  border-radius: 2px;',
+            '  padding: 0 3px;',
+            '}'
+        ].join('\n');
+        document.head.appendChild(style);
+    }
+
+}(window));

@@ -1,0 +1,797 @@
+// Trello #9280 — Checkout CX optimization (Google consultancy Q1 2026).
+// Mirror of the PHP CHECKOUT_FX_DISPLAY_ENABLED flag in Includes/localsettings.php.
+// When false, the FX subscript per tier (≈ X EUR/USD under each price) and
+// the FX-altcurrency precomputation in drawSections() are skipped entirely.
+// Toggle BOTH flags together (PHP + JS) when product/marketing wants to
+// surface FX information again.
+if (typeof DSIM_CHECKOUT_FX_DISPLAY_ENABLED === 'undefined') {
+  var DSIM_CHECKOUT_FX_DISPLAY_ENABLED = false;
+}
+
+var dsimTopupObj = function() {
+  this.er = {};
+  this.er['url'] = new RegExp("[a-z]+[-][a-z]+");
+}
+dsimTopupObj.prototype.getChk = function(){ return this.chk; }
+dsimTopupObj.prototype.setChk = function(chk){ this.chk = chk; }
+dsimTopupObj.prototype.getChk2 = function(){ return this.chk2; }
+dsimTopupObj.prototype.setChk2 = function(chk2){ this.chk2 = chk2; }
+dsimTopupObj.prototype.getAlias = function(){ return this.alias; }
+dsimTopupObj.prototype.setAlias = function(chk){ this.alias = alias; }
+dsimTopupObj.prototype.setTemp = function(temp){ this.temp = temp; }
+dsimTopupObj.prototype.setLang = function(lang){ this.lang = lang; }
+dsimTopupObj.prototype.getLang = function(){ return this.lang; }
+dsimTopupObj.prototype.setCountry = function(country){
+  this.country = country;
+  if (typeof this.origUrlCtrId === 'undefined' || this.origUrlCtrId === null || this.origUrlCtrId === '') {
+    this.origUrlCtrId = country;
+  }
+}
+dsimTopupObj.prototype.setCountryTxt = function(countryTxt){ this.countryTxt = countryTxt; }
+dsimTopupObj.prototype.getCountryTxt = function(){ return this.countryTxt; }
+dsimTopupObj.prototype.setNewSelCountry = function(country){ this.newCountry = country; }
+dsimTopupObj.prototype.getNewSelCountry = function(){ return this.newCountry; }
+dsimTopupObj.prototype.setSelCountryId = function(id){ this.selCId = id; }
+dsimTopupObj.prototype.getSelCountryId = function(){ return this.selCId; }
+dsimTopupObj.prototype.setOrigUrlCountryId = function(id){ this.origUrlCtrId = id; }
+dsimTopupObj.prototype.getOrigUrlCountryId = function(){ return this.origUrlCtrId; }
+dsimTopupObj.prototype.setUrlHasDestCountry = function(countryCode){
+  this.urlHasDestCountry = countryCode || '';
+}
+dsimTopupObj.prototype.getUrlHasDestCountry = function(){
+  return this.urlHasDestCountry || '';
+}
+dsimTopupObj.prototype.setSelOperId = function(id){ this.selOId = id; }
+dsimTopupObj.prototype.getSelOperId = function(){ return this.selOId; }
+dsimTopupObj.prototype.setTab = function(tab){
+  this.tab = tab;
+  this.tabName = '#' + this.tab + ' .sections-topup';
+}
+dsimTopupObj.prototype.getTab = function(){ return this.tab; }
+dsimTopupObj.prototype.getTabName = function(){ return this.tabName; }
+dsimTopupObj.prototype.convertListToULLI = function(list) {
+
+  list = list.split(',');
+  // list.sort(function() { return 0.5 - Math.random() });
+  var html = '<ul class="bundle_li_fo">';
+
+   for(var i=0; i<list.length; i++) {
+      html += '<li>' + list[i].replace(/_/g,","); + '</li>';
+    }
+
+  html += '</ul>';
+  return html;
+}
+dsimTopupObj.prototype.getUriHash = function(){ return this.uri_hash; }
+dsimTopupObj.prototype.setUriHash = function(uri_hash){ this.uri_hash = uri_hash; }
+dsimTopupObj.prototype.setMsisdn = function(msisdn){ this.msisdn = msisdn; }
+dsimTopupObj.prototype.getMsisdn = function(){ return this.msisdn; }
+dsimTopupObj.prototype.setMsisdnCh = function(msisdnCh){ this.msisdnCh = msisdnCh; }
+dsimTopupObj.prototype.setResUri = function(uri){ this.resUri = uri; }
+dsimTopupObj.prototype.getResUri = function(){ return this.resUri; }
+dsimTopupObj.prototype.setPoUri = function(uri){ this.poUri = uri; }
+dsimTopupObj.prototype.getPoUri = function(){ return this.poUri; }
+dsimTopupObj.prototype.setTrpr = function(trpr){ this.trpr = trpr; }
+dsimTopupObj.prototype.setTrt = function(trt){ this.trt = trt; }
+dsimTopupObj.prototype.setTrSel = function(trsel){ this.trsel = trsel; }
+dsimTopupObj.prototype.setTrta = function(trta){ this.trta = trta; }
+dsimTopupObj.prototype.setTrr = function(trr){ this.trr = trr; }
+dsimTopupObj.prototype.setTrs = function(trs){ this.trs = trs; }
+dsimTopupObj.prototype.setFetch = function(fetch){ this.fetch = fetch; }
+dsimTopupObj.prototype.setSelSection = function(inx){ this.inx = inx; }
+dsimTopupObj.prototype.getSelSection = function(){ return this.inx; }
+dsimTopupObj.prototype.setSMSnotif = function(sms_notif){ this.sms_notif = sms_notif; }
+dsimTopupObj.prototype.setSMSnotifTxt = function(sms_notif_txt){ this.sms_notif_txt = sms_notif_txt; }
+dsimTopupObj.prototype.setCur = function(cur){ this.cur = cur; }
+dsimTopupObj.prototype.getCur = function(){
+  var rs = 'USD';
+  if (this.cur=='EUR') rs = 'EUR';
+  return rs; }
+dsimTopupObj.prototype.getOthCur = function(){
+  if (this.cur=='EUR') rs = 'USD';
+  else rs = 'EUR';
+  return rs; }
+dsimTopupObj.prototype.setEmail = function(email){ this.email = email; }
+dsimTopupObj.prototype.setBfp = function(bfp){ this.bfp = fbp; }
+
+dsimTopupObj.prototype.getEmail = function(){ return this.email; }
+dsimTopupObj.prototype.setNpEmail = function(email){ this.np_email = email; }
+dsimTopupObj.prototype.getNpEmail = function(){ return this.np_email; }
+dsimTopupObj.prototype.getTopC = function(){
+  if(this.lang != 'es') var top_c = ["ph","mx","it","mm","ma","es","cu"];
+  else var top_c = ["mx","es","ve","do","co","uy", "cu"];
+  if(typeof(this.country) !== 'undefined'){
+    var top = [this.country];
+    for (i = 0; i < top_c.length; i++){
+      if(this.country != top_c[i])
+        top.push(top_c[i]);
+    }
+  }
+  else var top = top_c;
+  return top;
+}
+
+dsimTopupObj.prototype.getIsNauta = function(){ return this.isNauta; }
+dsimTopupObj.prototype.setIsNauta = function(isNauta){ this.isNauta = isNauta; }
+dsimTopupObj.prototype.getNautaEmail = function(){ return this.nautaEmail; }
+dsimTopupObj.prototype.setNautaEmail = function(nautaEmail){ this.nautaEmail = nautaEmail; }
+
+dsimTopupObj.prototype.getIsSpecialServiceInput = function(){ return this.isSpecialServiceInput; }
+dsimTopupObj.prototype.setIsSpecialServiceInput = function(isSpecialServiceInput){ this.isSpecialServiceInput = isSpecialServiceInput; }
+
+// dsimTopupObj.prototype.getIsSpecialServiceInputMsisdnReq = function(){ return this.isSpecialServiceInputMsisdnReq; }
+// dsimTopupObj.prototype.setIsSpecialServiceInputMsisdnReq = function(isSpecialServiceInputMsisdnReq){ this.isSpecialServiceInputMsisdnReq = isSpecialServiceInputMsisdnReq; }
+
+dsimTopupObj.prototype.getSpecialServiceInput = function(){ return this.specialServiceInput; }
+dsimTopupObj.prototype.setSpecialServiceInput = function(specialServiceInput){ this.specialServiceInput = specialServiceInput; }
+
+dsimTopupObj.prototype.getPage = function (){ return this.page; }
+dsimTopupObj.prototype.setPage = function (page){ this.page = page; }
+dsimTopupObj.prototype.getrcToken = function (){ return this.rctoken; }
+dsimTopupObj.prototype.setrcToken = function (rctoken){
+  this.rctoken = rctoken;
+  if (rctoken !== 'dfasj128fadskjalk289238f__adsf12e9fds') {
+    this.rctoken_fb_reason = undefined;
+  }
+}
+dsimTopupObj.prototype.setrcTokenFallbackReason = function (reason){ this.rctoken_fb_reason = reason; }
+dsimTopupObj.prototype.getrcTokenFallbackReason = function (){ return this.rctoken_fb_reason; }
+dsimTopupObj.prototype.checkFetch = function(){
+  if(typeof(this.fetch)!=='undefined' && this.fetch !== null && typeof(this.fetch.opers)!=='undefined' && this.fetch.opers!==null
+      && typeof(this.fetch.opers[this.selOId])!=='undefined' && this.fetch.opers[this.selOId]!==null
+      && typeof(this.fetch.opers[this.selOId].tr)!=='undefined' && this.fetch.opers[this.selOId].tr!==null && this.fetch.opers[this.selOId].tr.length>0){
+    return true;
+  }else{
+    return false;
+  }
+}
+dsimTopupObj.prototype.checkUrl = function(url){
+  return this.er['url'].test(url);
+}
+dsimTopupObj.prototype.getCheckMsisdn = function(){
+  var data = {t:"chk_oper",msisdn:this.msisdn,lang:this.lang,new:this.newCountry,sel:this.selCId};
+  if (typeof(this.page) !== 'undefined') data.page = this.page;
+  if (typeof(this.rctoken) !== 'undefined') data.rctoken = this.rctoken;
+  if (typeof(this.rctoken_fb_reason) !== 'undefined' && this.rctoken_fb_reason !== '') {
+    data.rctoken_fb_reason = this.rctoken_fb_reason;
+  }
+  return data;
+}
+dsimTopupObj.prototype.getCheckMsisdnFromHome = function(){
+  var data = {t:"chk_oper",msisdn:this.msisdn,lang:this.lang,new:this.newCountry,sel:this.selCId,origin:'from_home'};
+  if (typeof(this.page) !== 'undefined') data.page = this.page;
+  if (typeof(this.rctoken) !== 'undefined') data.rctoken = this.rctoken;
+  if (typeof(this.rctoken_fb_reason) !== 'undefined' && this.rctoken_fb_reason !== '') {
+    data.rctoken_fb_reason = this.rctoken_fb_reason;
+  }
+  return data;
+}
+dsimTopupObj.prototype.getChgCtryOps = function(){
+  // var data = {t:"chg_oper",new:this.newCountry,sel:this.selCId,uri:this.resUri,lang:this.lang, cv:1};
+  var originCountryId = (typeof this.origUrlCtrId !== 'undefined' && this.origUrlCtrId !== null && this.origUrlCtrId !== '')
+    ? this.origUrlCtrId
+    : (typeof this.country !== 'undefined' ? this.country : '');
+
+  var data = {t:"chg_oper",new:this.newCountry,lang:this.lang, cv:1, sel:this.selCId, origurlctrid: originCountryId};
+  if (this.urlHasDestCountry && this.urlHasDestCountry.length === 2) {
+    data.url_has_dest_country = 1;
+  }
+  if (typeof(this.page) !== 'undefined') data.page = this.page;
+  if (typeof(this.temp) !== 'undefined') data.temp = this.temp;
+  if (typeof isGiftcardPage !== 'undefined' && isGiftcardPage) data.gf = 1;
+  return data;
+}
+dsimTopupObj.prototype.getCheckNauta = function(){
+  return {t:"chk_nauta",nauta_email:this.nautaEmail,lang:this.lang};
+}
+dsimTopupObj.prototype.getCheckSpecialServiceInput = function(){
+  return {t:"chk_specialserviceinput",specialServiceInput:this.specialServiceInput,lang:this.lang};
+}
+dsimTopupObj.prototype.resetPhone = function(){
+  return {t:"res_msisdn",new:this.newCountry,sel:this.selCId,uri:this.resUri,lang:this.lang};
+}
+dsimTopupObj.prototype.getNoTramo = function(){
+  return {t:"no_tr",email:this.email,msisdn:this.msisdn,uri:this.poUri,p:this.selCId,op:this.selOId,lang:this.lang};
+}
+dsimTopupObj.prototype.getNoPromo = function(){
+  return {t:"no_pr",email:this.np_email,p:this.selCId,op:this.selOId,lang:this.lang};
+}
+dsimTopupObj.prototype.getGoPay = function(){
+  if(this.isNauta){
+    return {is_special_service_input:0,nauta_email:this.nautaEmail,uri:this.poUri,p:this.selCId,op:this.selOId,trt:this.trt,trta:this.trta,trr:this.trr,trs:this.trs,lang:this.lang,trpr:this.trpr,trsel:this.trsel,nauta:1, uri_hash:this.uri_hash, sms_notif:this.sms_notif, sms_notif_txt:this.sms_notif_txt };
+  } else  if(this.isSpecialServiceInput){
+    var special_service_input_name = encodeURIComponent($("#special_service_input_name").val());
+    var special_service_input_msisdn_req = $("#special_service_input_msisdn_req").val();
+    return {is_special_service_input:1,special_service_input:this.specialServiceInput, special_service_input_msisdn_req:special_service_input_msisdn_req, special_service_input_name:special_service_input_name, uri:this.poUri,p:this.selCId,op:this.selOId,trt:this.trt,trta:this.trta,trr:this.trr,trs:this.trs,lang:this.lang,trpr:this.trpr,trsel:this.trsel,nauta:0, uri_hash:this.uri_hash, sms_notif:this.sms_notif, sms_notif_txt:this.sms_notif_txt };
+  } else {
+    return {is_special_service_input:0,msisdn:this.msisdn,uri:this.poUri,p:this.selCId,op:this.selOId,trt:this.trt,trta:this.trta,trr:this.trr,trs:this.trs,lang:this.lang,trpr:this.trpr,trsel:this.trsel,nauta:0,uri_hash:this.uri_hash, sms_notif:this.sms_notif, sms_notif_txt:this.sms_notif_txt};
+  }
+}
+dsimTopupObj.prototype.getFetchParams = function(){
+  var params = {id_p:this.selCId,id_o:this.selOId,lang:this.lang,chk:this.chk,chk2:this.chk2};
+  if(typeof(this.alias)!=='undefined' && this.alias !== null && this.alias !== null) params['alias'] = this.alias;
+  if(typeof(this.msisdnCh)!=='undefined' && this.msisdnCh !== null && this.msisdnCh !== '') params['msisdnCh'] = this.msisdnCh;
+  return params;
+}
+dsimTopupObj.prototype.getLoadIniPromos = function(){
+  return {t:"load_promos",new:this.country,sel:this.selCId,op:this.selOId,lang:this.lang};
+}
+
+// Custom sorting function
+function customSort(a, b) {
+  const specialCategories = ["Tarjeta Regalo", "Giftcard"];
+  if (specialCategories.includes(a) && !specialCategories.includes(b)) {
+    return -1;
+  }
+  if (!specialCategories.includes(a) && specialCategories.includes(b)) {
+    return 1;
+  }
+  return a.localeCompare(b);
+}
+
+dsimTopupObj.prototype.updateOpers = function(id, opers, mobile, check, others, opers_others) {
+  if (arguments.length === 5) {
+    opers_others = others;
+    others = check;
+    check = false;
+  } else if (arguments.length === 4) {
+    opers_others = {};
+    others = check;
+    check = false;
+  }
+
+  check = !!check;
+  others = !!others;
+
+  var $mainList = $('#oper-recargas-list');
+  var $othersList = $('#oper-recargas-list-others');
+  var $container = $('#container-oper-recargas');
+
+  // Save the filter box and search results before emptying (for giftcards)
+  var $filterBox = $('#filter_gc_box').length ? $('#filter_gc_box').detach() : null;
+  var $searchResults = $('#searchResults').length ? $('#searchResults').detach() : null;
+
+  if ($othersList.length) {
+    $othersList.empty();
+  }
+
+  if ($mainList.length) {
+    $mainList.addClass('ds-topup-grid topup-rel-list').removeClass('row').removeClass('mt-md-4');
+  }
+
+ if ($container.length) {
+    $container.show();
+  }
+
+  if (typeof isGiftcardPage !== 'undefined' && isGiftcardPage) {
+    $('#title_others, #title_old, #title_others2').hide();
+    $('#oper-recargas-list-others').addClass('ds-giftcard-list');
+  }
+
+  var mobileFlag = (typeof mobile === 'undefined') ? '' : mobile;
+
+  var noSvMsg = (typeof global_lang !== 'undefined' && global_lang === 'es')
+    ? 'No hay servicios adicionales en estos momentos para este pais.'
+    : 'There are no additional services at the moment for this country.';
+
+  var defaultAnalytics = (typeof isGiftcardPage !== 'undefined' && isGiftcardPage && typeof analyticsGiftEvent !== 'undefined')
+    ? analyticsGiftEvent
+    : (typeof analyticsTopupEvent !== 'undefined' ? analyticsTopupEvent : 'topup-card-action');
+
+  function jsStringEscape(value) {
+    return String(value == null ? '' : value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  }
+
+  function resolveDisplayName(oper) {
+    var name = '';
+    if (oper && oper.operador_custom_name && $.trim(oper.operador_custom_name) !== '') {
+      name = $.trim(oper.operador_custom_name);
+    } else if (oper && oper.operador) {
+      name = $.trim(oper.operador);
+    } else if (oper && oper.name_oper_display) {
+      name = $.trim(oper.name_oper_display);
+    }
+
+    var country = '';
+    if (oper && oper.pais && $.trim(oper.pais) !== '') {
+      country = $.trim(oper.pais);
+    } else if (oper && oper.name_pais_display && $.trim(oper.name_pais_display) !== '') {
+      country = $.trim(oper.name_pais_display);
+    } else if (oper && oper.country && $.trim(oper.country) !== '') {
+      country = $.trim(oper.country);
+    }
+
+    if (country && name) {
+      var normalizedCountry = country.toLowerCase();
+      var normalizedName = name.toLowerCase();
+      if (normalizedName.indexOf(normalizedCountry) === -1) {
+        return country + ' - ' + name;
+      }
+    }
+
+    return name || country;
+  }
+
+  function resolveImageUrl(oper) {
+    if (oper && oper.img_cdn_url && $.trim(oper.img_cdn_url) !== '') {
+      return oper.img_cdn_url;
+    }
+    if (oper && oper.url_imagen && $.trim(oper.url_imagen) !== '') {
+      return 'https://www.doctorsim.com/img/oper/' + oper.url_imagen;
+    }
+    return '';
+  }
+
+  function buildCard(oper, options) {
+    var settings = $.extend({ useCheck: false }, options || {});
+    var displayName = resolveDisplayName(oper);
+
+    var imgUrl = resolveImageUrl(oper);
+    var hrefValue = '#';
+    var gotoUrl = '';
+    if (settings.useCheck) {
+      hrefValue = "javascript:checkTool('" + jsStringEscape(oper.id_operador) + "','" + jsStringEscape(oper.id_pais) + "','" + jsStringEscape(mobileFlag) + "')";
+    } else if (oper && oper.href) {
+      hrefValue = oper.href;
+      gotoUrl = oper.href;
+    }
+
+    var $card = $('<a>', {
+      'class': 'ds-topup-card loading',
+      'data-operator': displayName,
+      href: hrefValue,
+      'data-analytics': settings.analytics || defaultAnalytics
+    }).attr('notranslate', '');
+    
+    if (gotoUrl) {
+      $card.attr('data-goto-url', gotoUrl);
+    }
+
+    if (imgUrl) {
+      $('<img>', {
+        src: imgUrl,
+        alt: displayName,
+        loading: 'lazy'
+      }).appendTo($card);
+    }
+
+    if (displayName) {
+      $('<span>', {
+        'class': 'ds-topup-card__name',
+        text: displayName
+      }).appendTo($card);
+    }
+
+    return $card;
+  }
+
+  if ($mainList.length) {
+    $mainList.empty();
+    if (Array.isArray(opers) && opers.length) {
+      $.each(opers, function(_, oper) {
+        $mainList.append(buildCard(oper, { useCheck: check }));
+      });
+    }
+  }
+
+  var isGiftcardView = (typeof isGiftcardPage !== 'undefined' && isGiftcardPage);
+
+  if (others && $othersList.length) {
+    $('#title_others').show();
+    $('#title_others2').show();
+    $('#title_old').hide();
+    $othersList.show();
+
+    var categories = Object.keys(opers_others || {}).sort(customSort);
+    if (!categories.length) {
+      $othersList.append(
+        $('<div>', { 'class': 'col-12' }).append(
+          $('<div>', { 'class': 'alert alert-warning', role: 'alert' }).text(noSvMsg)
+        )
+      );
+      $('#filter_gc_box').hide();
+    } else {
+      var totalItems = 0;
+      var hideGiftcardCrossSell = (
+        typeof this.temp !== 'undefined' &&
+        this.temp === 'po' &&
+        (typeof isGiftcardPage === 'undefined' || !isGiftcardPage)
+      );
+      $.each(categories, function(_, category) {
+        var items = opers_others[category] || [];
+        if (!Array.isArray(items) || !items.length) {
+          return;
+        }
+
+        var slug = category.toString().trim().toLowerCase().replace(/\s+/g, '-');
+        var isGiftcardCategory = (category === 'Tarjeta Regalo' || category === 'Giftcard');
+        if (hideGiftcardCrossSell && isGiftcardCategory) {
+          return;
+        }
+        
+        var $category = $('<div>', {
+          id: 'oper-recargas-list-others-' + slug,
+          'class': 'col-12' + (isGiftcardCategory ? ' ds-giftcard-section' : '')
+        });
+
+        var $sectionTitle = $('<div>', { 
+          'class': 'ds-section-title' + (isGiftcardCategory ? ' ds-section-title--with-search' : '')
+        }).append(
+          $('<h3>').text(category)
+        );
+        
+        $category.append($sectionTitle);
+
+        // Re-add the filter box and search results for giftcard category
+        if (isGiftcardCategory && $filterBox) {
+          $filterBox.show();
+          $sectionTitle.append($filterBox);
+        }
+        if (isGiftcardCategory && $searchResults) {
+          $category.append($searchResults);
+        }
+
+        var sortedItems = items.slice().sort(function(a, b) {
+          var langKeyA = ((global_lang === 'es') ? a.txt_es : a.txt_en) || '';
+          var langKeyB = ((global_lang === 'es') ? b.txt_es : b.txt_en) || '';
+          var primary = langKeyA.localeCompare(langKeyB);
+          if (primary !== 0) {
+            return primary;
+          }
+          var cleanA = (a.clean_o || '').toString();
+          var cleanB = (b.clean_o || '').toString();
+          return cleanA.localeCompare(cleanB);
+        });
+
+        if (isGiftcardCategory) {
+
+          var grouped = {};
+          var subcategoryOrder = [];
+
+          $.each(sortedItems, function(_, oper) {
+            var subKey = ((global_lang === 'es') ? oper.txt_es : oper.txt_en) || '';
+            if (!grouped[subKey]) {
+              grouped[subKey] = [];
+              subcategoryOrder.push(subKey);
+            }
+            grouped[subKey].push(oper);
+          });
+
+          $.each(subcategoryOrder, function(_, subcategoryName) {
+            var $subcategory = $('<div>', { 'class': 'subcategory' });
+            $subcategory.append(
+              $('<span>', { 'class': 'hX2 text-bluegrey' }).text(subcategoryName).css({
+                display: 'block',
+                fontSize: '1.1rem',
+                fontWeight: 700
+              })
+            );
+
+            var $grid = $('<div>', { 'class': 'ds-topup-grid' });
+            $.each(grouped[subcategoryName], function(_, oper) {
+              $grid.append(buildCard(oper, { useCheck: check }));
+              totalItems++;
+            });
+            $subcategory.append($grid);
+            $category.append($subcategory);
+          });
+        } else {
+          var $grid = $('<div>', { 'class': 'ds-topup-grid' });
+          $.each(sortedItems, function(_, oper) {
+            $grid.append(buildCard(oper, { useCheck: check }));
+            totalItems++;
+          });
+          $category.append($grid);
+        }
+
+        $othersList.append($category);
+      });
+
+      if (totalItems === 0) {
+        $othersList.append(
+          $('<div>', { 'class': 'col-12' }).append(
+            $('<div>', { 'class': 'alert alert-warning', role: 'alert' }).text(noSvMsg)
+          )
+        );
+        $('#filter_gc_box').hide();
+      } else {
+        if ($('#filter_gc_box').length) {
+          if (isGiftcardView) {
+            $('#filter_gc_box').fadeIn();
+          } else if (totalItems > 4) {
+            $('#filter_gc_box').fadeIn();
+          } else {
+            $('#filter_gc_box').hide();
+          }
+        }
+      }
+    }
+  } else {
+    $('#title_others').hide();
+    $('#title_others2').hide();
+    $('#title_old').show();
+    if (typeof isGiftcardPage !== 'undefined' && isGiftcardPage) {
+      $('#title_old').hide();
+    }
+    if ($('#filter_gc_box').length) {
+      if (isGiftcardView) {
+        $('#filter_gc_box').show();
+      } else {
+        $('#filter_gc_box').hide();
+      }
+    }
+
+    if ($othersList.length && typeof isGiftcardPage !== 'undefined' && isGiftcardPage) {
+      $othersList.append(
+        $('<div>', { 'class': 'col-12' }).append(
+          $('<div>', { 'class': 'alert alert-warning', role: 'alert' }).text(noSvMsg)
+        )
+      );
+    }
+  }
+
+  this.selCId = id;
+}
+
+dsimTopupObj.prototype.updateCountry = function(id){
+  this.selCId = id;
+}
+dsimTopupObj.prototype.drawSections = function(){
+  var obj = this;
+  var tabName = this.getTabName();
+  var t_cur = this.getCur();
+  if (this.checkFetch()){
+    $(tabName).empty();
+
+    // Depending on Tab type, draw differently
+    var draw_tramo_type_default = 3; // airtime default
+    var draw_type = "tramos"; // default is tramos. desc is bundles and other with descirption
+
+    var holder_class = "col-lg-8";
+    var extra_class_type = "";
+
+    var is_gc_related = false;
+    // type sel
+    var draw_tramo_type = tabName.match(/\d+/)[0];
+    switch(draw_tramo_type) {
+      case '16': // banda_ancha
+      // case '15': // high_speed_internet
+      case '12': // calling_cards
+      case '7': // landline
+      case '6': // bundles
+      case '5': // data
+      case '9': // voip
+        draw_type = "desc";
+        extra_class_type = ' type_' + draw_tramo_type;
+        break;
+        // GC Related
+      case '4': // giftcard
+      // case '8': // tv
+      case '10': // electricity
+      case '11': // gaming
+      case '13': // prepaid cards
+      case '17': // water
+      case '18': // gas
+      case '19': // shoppoing
+      case '20': // food
+      case '21': // enter
+      case '22': // travel
+        draw_type = "desc";
+        extra_class_type = ' type_' + draw_tramo_type;
+        is_gc_related = true;
+        break;
+      case '3': // airtime
+        draw_type = "tramos";
+        extra_class_type = ' type_' + draw_tramo_type;
+        break;
+      default:
+        draw_type = "tramos";
+        extra_class_type = ' type_3'; // airtime default
+    }
+
+    if (is_gc_related) {
+      $("#denom-tab").hide();
+    } else {
+      $("#denom-tab").show();
+    }
+
+    if (draw_type == "desc") {
+      $("#tramos_holder_div_"+draw_tramo_type).removeClass(holder_class);
+    } else {
+      $("#tramos_holder_div_"+draw_tramo_type).addClass(holder_class);
+    }
+
+    // Set labels according to type
+    $("#label_cant_mobile").html(label_ind[draw_tramo_type]);
+    $("#label_prod_rx_desc").html(label_ind_sub[draw_tramo_type]);
+
+    var at_least_one_desc_type = false; // flag to identify that there is at least one price point with d_n and d_d
+    var bv = "Top Choice";
+    var bf = "By for ";
+    var gct = "GiftCard";
+    var cdesv = "Valid for ";
+    if (typeof(global_lang)!=='undefined' && global_lang) {
+      var _gl2 = global_lang.substring(0,2);
+      if (_gl2 == "es") {
+        bv = "M\u00E1s Vendido"; bf = "Comprar por "; gct = "Tarjeta Regalo"; cdesv = "V\u00E1lido para ";
+      } else if (_gl2 == "fr") {
+        bv = "Meilleur choix"; bf = "Acheter pour "; gct = "Carte Cadeau"; cdesv = "Valable pour ";
+      } else if (_gl2 == "it") {
+        bv = "Scelta migliore"; bf = "Acquista per "; gct = "Carta Regalo"; cdesv = "Valido per ";
+      } else if (_gl2 == "pt") {
+        bv = "Mais vendido"; bf = "Comprar por "; gct = "Cart\u00E3o Presente"; cdesv = "V\u00E1lido por ";
+      } else if (_gl2 == "de") {
+        bv = "Top-Auswahl"; bf = "Kaufen f\u00FCr "; gct = "Geschenkkarte"; cdesv = "G\u00FCltig f\u00FCr ";
+      } else if (_gl2 == "nl") {
+        bv = "Topaanbod"; bf = "Kopen voor "; gct = "Cadeaukaart"; cdesv = "Geldig voor ";
+      } else if (_gl2 == "ar") {
+        bv = "\u0627\u0644\u0623\u0641\u0636\u0644"; bf = "\u0634\u0631\u0627\u0621 \u0628\u0640 "; gct = "\u0628\u0637\u0627\u0642\u0629 \u0647\u062F\u064A\u0629"; cdesv = "\u0635\u0627\u0644\u062D \u0644\u0640 ";
+      }
+    }
+
+    if (typeof(dest_oper)!=='undefined') {
+      if (global_lang && global_lang.substring(0,2) == "es") {
+        gct = gct + ' ' +dest_oper;
+      } else {
+        gct = dest_oper + ' '+gct;
+      }
+    }
+
+    // Trello #9280 (Google CX rec): mark the top-N highest-value tiers as
+    // "featured" so they render in a bigger box, nudging AOV upward.
+    // Uses d.p_a[t_cur] for ranking; falls back to d.p (EUR price) if missing.
+    var _trArr = this.fetch.opers[this.selOId].tr;
+    var _featuredCount = 2;
+    var _featuredIdxSet = {};
+    if (Array.isArray(_trArr) && _trArr.length > _featuredCount) {
+      var _ranked = _trArr.map(function(d, i){
+        var price = (d.p_a && d.p_a[t_cur] !== undefined)
+          ? parseFloat(String(d.p_a[t_cur]).replace(',', '.'))
+          : parseFloat(d.p || 0);
+        return { i: i, price: isNaN(price) ? 0 : price };
+      }).sort(function(a, b){ return b.price - a.price; });
+      for (var _fi = 0; _fi < _featuredCount && _fi < _ranked.length; _fi++) {
+        _featuredIdxSet[_ranked[_fi].i] = true;
+      }
+    }
+
+    // Trello #9280: pick the alternate-currency labels for the FX subscript.
+    // Always anchor to USD/EUR as universal references; if the user is already
+    // browsing in one of them, surface only the other.
+    // Gated behind DSIM_CHECKOUT_FX_DISPLAY_ENABLED (mirror of PHP
+    // CHECKOUT_FX_DISPLAY_ENABLED); when off, _fxAlts stays empty and the
+    // append loop below is a no-op.
+    var _fxSamplePa = (Array.isArray(_trArr) && _trArr.length && _trArr[0].p_a) ? _trArr[0].p_a : {};
+    var _fxAlts = [];
+    if (DSIM_CHECKOUT_FX_DISPLAY_ENABLED) {
+      if (t_cur !== 'USD' && _fxSamplePa['USD'] !== undefined) _fxAlts.push('USD');
+      if (t_cur !== 'EUR' && _fxSamplePa['EUR'] !== undefined) _fxAlts.push('EUR');
+    }
+
+    $.each(this.fetch.opers[this.selOId].tr,function(i,d){
+      var html = '<div class="span6">'+
+      '<a class="boton-precio-recarga';
+      // Det Recomm - Default
+
+      var active_n_top = false;
+      if (typeof(d.top)!=='undefined') {
+        if (d.top == 1) {
+          active_n_top = true
+        }
+      }
+      if (active_n_top) html+=" active";
+      if (_featuredIdxSet[i]) html+=" boton-precio-recarga--featured";
+      if (draw_tramo_type) html+=extra_class_type;
+      // Extra service type options (different to just price for regular airtime)
+      var html_extra_service_type = '';
+      var ribbon = ' ';
+      if (active_n_top) {
+        ribbon = ' <div class="ribbon2">'+bv+'</div>';
+      }
+
+      if (draw_type == "desc") {
+        var parent_id_oper = $("#sel_tp_op_but").attr('id_oper');
+        if (typeof(d.d_n)!=='undefined' && typeof(d.d_d)!=='undefined' && d.d_n!='' && d.d_d!=''){
+          html_extra_service_type = '<div class="col-12 tramo '+extra_class_type+'"><img class="b_name_oper_img" src="/img/oper/'+d.img+'" alt="'+d.o+'" width="14" height="14" border="0" /><span class="b_name">'+d.d_n+'</span></div><div class="col-12 tramo b_desc_div '+extra_class_type+'"><span class="b_desc ">'+obj.convertListToULLI(d.d_d)+'</span></div>';
+          at_least_one_desc_type = true;
+        // bypass if no description given (some exceptions)
+        } else if ([4, 10, 11, 13, 17, 18, 19, 20, 21,22].includes(Number(draw_tramo_type))) {
+          // html_extra_service_type = '<div class="col-12 tramo '+extra_class_type+'"><div class="gcard_p"><img class="b_name_oper_img_gc" src="/img/oper/'+parent_id_oper+'.gif" alt="'+d.o+'" width="14" height="14" border="0" /></div><span class="b_name pull-right">'+default_denom_name_gc+'</span></div><div class="col-12 tramo b_desc_div '+extra_class_type+'"><span class="b_desc"><span class="b_desc_bold">'+d.r+' '+d.r_c+'</span>'+'</span></div>';
+          html_extra_service_type = '<div class="col-12 tramo '+extra_class_type+' prod_tr_name">'+gct+'</div><div class="col-12 tramo '+extra_class_type+'"><div class="gcard_p"><img class="b_name_oper_img_gc" src="/img/oper/'+d.img+'" alt="'+d.o+'" width="14" height="14" border="0" /></div></div><div class="col-12 tramo b_desc_div '+extra_class_type+'"><span class="b_desc"><span class="b_desc_bold">'+d.r+' '+d.r_c+'</span>'+'</span></div>';
+        } else if(draw_tramo_type!=='7') {
+          html_extra_service_type = '<div class="col-12 tramo '+extra_class_type+'"><img class="b_name_oper_img" src="/img/oper/'+d.img+'" alt="'+d.o+'" width="14" height="14" border="0" /><span class="b_name">'+default_denom_name+'</span></div><div class="col-12 tramo b_desc_div '+extra_class_type+'"><span class="b_desc"><ul class="bundle_li_fo"><li>'+default_denom_desc+'<span>'+d.r+' '+d.r_c+'</span></li></ul>'+'</span></div>';
+        }
+      }
+      // standard for regular airtime
+      if (typeof(d.rc)!=='undefined' && typeof(d.rc_c)!=='undefined' && d.rc!='' && d.rc_c!=''){
+        // Class p_tramo is set to hidden for BUNDLES (6), INT (5) and others, except in DEV envs.
+        html += '" top-id="'+i+'" data-id-tool="'+(d.t||'')+'">'+html_extra_service_type+ribbon+'<div class="col-12 tramo p_tramo '+extra_class_type+'"><span class="price_cost_o">'+d.rc+' '+d.rc_c+'</span></br><span class="text-12 bloc">'+d.r+' '+d.r_c+'</span><span class="hlp_price bloc" id="price_cost_'+i+'"> - '+d.p_a[t_cur]+' <span class="hlp_price_cur bloc">'+t_cur+'</span></span>';
+      } else if ([4, 10, 11, 13, 17, 18, 19, 20, 21, 22].includes(Number(draw_tramo_type))) {
+        // html += '" top-id="'+i+'">'+html_extra_service_type+ribbon+'<div class="col-12 tramo p_tramo '+extra_class_type+'"><span class="price_cost_o">'+d.r+' '+d.r_c+'</span><span style="display:none;" class="hlp_price_gc hlp_price" id="price_cost_'+i+'"> '+d.p_a[t_cur]+' <span class="hlp_price_cur">'+t_cur+'</span></span>';
+        html += '" top-id="'+i+'" data-id-tool="'+(d.t||'')+'">'+html_extra_service_type+ribbon+'<div class="col-12 tramo p_tramo '+extra_class_type+'"><span class="price_cost_o">'+d.r+' '+d.r_c+'</span>';
+        var cdes = cdesv;
+        if (typeof(dest_country)!=='undefined') {
+          cdes = cdes + dest_country
+        } else {
+          cdes = cdes + dc.toUpperCase();
+        }
+
+        html += '<span style="font-size: 11px;">'+cdes+'</span><span class="hlp_dc"><div class="bag_fl iti__flag iti__'+dc+'"></div></span>';
+      }else{
+        html += '" top-id="'+i+'" data-id-tool="'+(d.t||'')+'">'+html_extra_service_type+ribbon+'<div class="col-12 tramo p_tramo '+extra_class_type+'"><span class="price_cost_o">'+d.r+' '+d.r_c+'</span><span class="hlp_price bloc" id="price_cost_'+i+'"> '+d.p_a[t_cur]+' <span class="hlp_price_cur bloc">'+t_cur+'</span></span>';
+      }
+      if (obj.getF2Pr()){
+        html += '<br/><span class="text-12 bloc">'+d.p_a[obj.cur]+' '+obj.cur+'</span></div></div></div>';
+      }
+      // Trello #9280 (Google CX rec): FX subscript per tier — anchor users to
+      // USD/EUR universal references regardless of the active checkout currency.
+      if (_fxAlts.length && d.p_a) {
+        var _fxParts = [];
+        for (var _ai = 0; _ai < _fxAlts.length; _ai++) {
+          var _altCur = _fxAlts[_ai];
+          if (d.p_a[_altCur] !== undefined) {
+            _fxParts.push('&asymp; ' + d.p_a[_altCur] + ' ' + _altCur);
+          }
+        }
+        if (_fxParts.length) {
+          html += '<span class="bloc text-11 fx-subscript" style="opacity:0.75;font-size:11px;">'
+            + _fxParts.join(' / ')
+            + '</span>';
+        }
+      }
+      $(tabName).append(html);
+    });
+    if (!at_least_one_desc_type && (! ([4, 10, 11, 13, 17, 18, 19, 20, 21, 22].includes(Number(draw_tramo_type))))) {
+      // if there is not one price point of type desc (bundles, etc) with d_n and d_d, lets surface the price at least, to show something
+      $(".p_tramo").removeClass('p_tramo');
+      $("#tramos_holder_div_"+draw_tramo_type+" > div > a").removeClass(extra_class_type);
+    }
+  }
+}
+dsimTopupObj.prototype.getAltCur= function(){
+  if(typeof(this.fetch)!=='undefined' && this.fetch !== null && typeof(this.fetch.alt_cur)!=='undefined' && this.fetch.alt_cur!=''){
+    return this.fetch.alt_cur;
+  }else return false;
+
+
+}
+dsimTopupObj.prototype.getSelObject = function(){
+  var res = false;
+  if (typeof(this.inx)!=='undefined' && this.inx !== null){
+    if(typeof(this.fetch)!=='undefined' && this.fetch !== null && typeof(this.fetch.opers)!=='undefined' && this.fetch.opers!==null
+        && typeof(this.fetch.opers[this.selOId])!=='undefined' && this.fetch.opers[this.selOId]!==null
+        && typeof(this.fetch.opers[this.selOId].tr)!=='undefined' && this.fetch.opers[this.selOId].tr!==null && this.fetch.opers[this.selOId].tr[this.inx]){
+      res = this.fetch.opers[this.selOId].tr[this.inx];
+      this.setTrt(res.t);
+      this.setTrta(res.t_a);
+      this.setTrr(res.r);
+      this.setTrs(res.s);
+      this.setTrpr(res.i_p);
+      this.setTrSel(res.tr);
+    }
+  }
+  return res;
+}
+dsimTopupObj.prototype.modifMsisdnInput = function(opt){
+  if(this.temp == 'po'){
+    if(opt=='hide') showWithMsisdn();
+    else if(opt=='show') showCheckMsisdnSubmit();
+  }
+}
+dsimTopupObj.prototype.modifNautaInput = function(opt){
+  if(this.temp == 'po'){
+    if(opt=='hide') showWithNauta();
+    else if(opt=='show') showCheckNautaSubmit();
+  }
+}
+dsimTopupObj.prototype.getF2Pr = function(){
+  if(typeof(this.fetch)!=='undefined' && this.fetch !== null && typeof(this.fetch.f2pr)!=='undefined' && this.fetch.f2pr===true){
+    return true;
+  }else{
+    return false;
+  }
+}
+dsimTopupObj.prototype.switchTab = function(tab) {
+  this.setTab(tab);
+  this.setSelOperId($('#'+this.tab)[0].getAttribute('idoper'));
+}

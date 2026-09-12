@@ -1,0 +1,241 @@
+/**
+ * doctorSIM Native App Styles
+ *
+ * Applied only when .in-native-app class is present on <html>.
+ * Hides web-only UI (header, footer, app banners, unlock/check menus)
+ * when running inside the native app WebView.
+ */
+
+/* ============================================================
+   HEADER & FOOTER
+   ============================================================ */
+
+.in-native-app .top-menu {
+  display: none !important;
+}
+
+.in-native-app .section-footer {
+  display: none !important;
+}
+
+/* ============================================================
+   APP DOWNLOAD BANNERS & LINKS
+   ============================================================ */
+
+.in-native-app .app-download-footer {
+  display: none !important;
+}
+
+.in-native-app .store-badge {
+  display: none !important;
+}
+
+.in-native-app .footer-app-qr {
+  display: none !important;
+}
+
+/* AppsFlyer smart banner */
+.in-native-app #afBannerPushDown,
+.in-native-app [id^="af-banner"],
+.in-native-app .smart-banner,
+.in-native-app [class*="smart-banner"],
+.in-native-app [class*="app-promo"],
+.in-native-app [class*="download-app"] {
+  display: none !important;
+}
+
+/* ============================================================
+   UNLOCK / PHONE CHECK MENU ITEMS (HEADER)
+   ============================================================ */
+
+.in-native-app li.nav-item:has(> #unlockPhone) {
+  display: none !important;
+}
+
+.in-native-app li.nav-item:has(> #phoneChecks) {
+  display: none !important;
+}
+
+/* Fallback for older WebViews without :has() */
+.in-native-app #unlockPhone {
+  display: none !important;
+}
+
+.in-native-app #phoneChecks {
+  display: none !important;
+}
+
+/* ============================================================
+   UNLOCK / PHONE CHECK LINKS (BY HREF PATTERN)
+   ============================================================ */
+
+.in-native-app a[href*="unlock-phone"],
+.in-native-app a[href*="liberar-movil"],
+.in-native-app a[href*="desbloquear-celular"],
+.in-native-app a[href*="phone-imei-checks"],
+.in-native-app a[href*="phone-checks"],
+.in-native-app a[href*="chequear-movil"],
+.in-native-app a[href*="blacklist"],
+.in-native-app a[href*="carrier-check"],
+.in-native-app a[href*="icloud"],
+.in-native-app a[href*="sim-lock"],
+.in-native-app a[href*="warranty-check"],
+.in-native-app a[href*="cant-find-model"],
+.in-native-app a[href*="no_encuentro_terminal"],
+.in-native-app a[href*="unlock-eligibility"] {
+  display: none !important;
+}
+
+/* Hide parent <li> items containing unlock/check links */
+.in-native-app li:has(a[href*="unlock-phone"]),
+.in-native-app li:has(a[href*="liberar-movil"]),
+.in-native-app li:has(a[href*="desbloquear-celular"]),
+.in-native-app li:has(a[href*="phone-imei-checks"]),
+.in-native-app li:has(a[href*="phone-checks"]),
+.in-native-app li:has(a[href*="chequear-movil"]),
+.in-native-app li:has(a[href*="blacklist"]),
+.in-native-app li:has(a[href*="no_encuentro_terminal"]),
+.in-native-app li:has(a[href*="cant-find-model"]) {
+  display: none !important;
+}
+
+/* Hide footer sections that link to unlock/check services */
+.in-native-app .footer-unlocks,
+.in-native-app [class*="unlocks-checks"] {
+  display: none !important;
+}
+
+/*
+ * NOTE: Do NOT use broad selectors like div[class*="unlock"] or
+ * section[class*="check"] here. The classes "unlock-box", "unlock-header",
+ * "unlock-body", and "inner-unlock" are generic UI panel components used
+ * across checkout, account dashboard, and other non-unlock pages.
+ * Only target unlock SERVICE links by href (see rules above).
+ */
+
+/* ============================================================
+   DOWNLOAD APP MENU ITEM (MOBILE HAMBURGER)
+   ============================================================ */
+
+.in-native-app li.nav-item:has(a[href*="download-app"]),
+.in-native-app li.nav-item:has(a[href*="descargar-app"]),
+.in-native-app li.nav-item:has(a[href*="telecharger-app"]) {
+  display: none !important;
+}
+
+/* ============================================================
+   LOADING DIMMER OVERLAY
+   The native app has its own loading indicator; suppress the
+   website's fullscreen #dimmer spinner so it doesn't block
+   the WebView or double up with the native loading state.
+
+   Exception: when a payment button has been clicked we DO want
+   to show #dimmer to bridge the white gap between form submit
+   and next page render (Apple Pay / Google Pay / etc.). The
+   `.dsim-paying` marker class is added by tp_checkout.js and
+   removed automatically after 15 seconds.
+   ============================================================ */
+
+.in-native-app #dimmer {
+  display: none !important;
+}
+
+.in-native-app.dsim-paying #dimmer {
+  display: block !important;
+}
+
+/* ============================================================
+   APPLE 3.1.1: EXCLUDED GIFT CARD CATEGORIES (iOS only)
+   Hide links to Entertainment, Gaming, Prepaid Cards, and TV
+   gift card categories inside the iOS native app WebView.
+
+   Gated by the `.dsim-native-ios` marker class, added client-side
+   by the inline detector in mobile_template_open.html when the UA
+   matches `doctorSIMApp` AND `iPhone|iPad|iPod`. The gate is
+   PURELY client-side on purpose: the gift-card landing pages are
+   served from the Cloudflare cache (URL-keyed only), so any
+   server-side decision baked into the HTML would be poisoned by
+   whichever client populated the cache first. The CSS check on
+   `.dsim-native-ios` runs in the WebView and is therefore
+   unaffected by who filled the cache.
+
+   Android intentionally keeps the full catalogue — the Apple
+   3.1.1 policy is iOS-specific and the Android storefront is
+   reviewed separately.
+   ============================================================ */
+
+.in-native-app.dsim-native-ios a[href*="entertainment-gift-cards"],
+.in-native-app.dsim-native-ios a[href*="gaming-cards"],
+.in-native-app.dsim-native-ios li:has(a[href*="entertainment-gift-cards"]),
+.in-native-app.dsim-native-ios li:has(a[href*="gaming-cards"]) {
+  display: none !important;
+}
+
+/* ============================================================
+   APPLE 3.1.1: EXCLUDED OPERATOR CATEGORIES (iOS only)
+   Hide every operator card whose service-type is on the
+   restricted list, by matching the `data-tt` attribute that the
+   `recargas_home.php` and `recargas_home_request*.php` templates
+   emit on each card (`<a class="ds-topup-card">`, `<div class="
+   col-...">`, etc.). The selector is element-agnostic on purpose.
+
+   This is the actual cache-safe coverage for the categories the
+   server-side filter (`SlimTopup` + `TopupConstants::
+   $native_app_excluded_service_types`) drops on a cache MISS —
+   namely TV / streaming, Gaming, Prepaid card, and Entertainment.
+   On a Cloudflare cache HIT served from HTML written by an
+   Android browser or a non-native client, those operators come
+   through verbatim; this rule hides them visually on iOS.
+
+   Numeric IDs match the constants in
+   `com/doctorSIM/topup/config/TopupConstants.class.php`:
+     8  = NETWORK_TOPUP_TYPE_TV
+     11 = NETWORK_TOPUP_TYPE_GAMING
+     13 = NETWORK_TOPUP_TYPE_PREPAID_CARD
+     21 = NETWORK_TOPUP_TYPE_ENTERTAINMENT
+   ============================================================ */
+
+.in-native-app.dsim-native-ios [data-tt="8"],
+.in-native-app.dsim-native-ios [data-tt="11"],
+.in-native-app.dsim-native-ios [data-tt="13"],
+.in-native-app.dsim-native-ios [data-tt="21"] {
+  display: none !important;
+}
+
+/* ============================================================
+   APPLE 3.1.1: EXCLUDED OPERATOR BRANDS (iOS only)
+   Hide direct links to Apple Gift Card / iTunes / Google Play
+   operator pages regardless of the country slug. Operator URLs
+   are built as `{country-slug}-{operator-slug}/`, so we match
+   the suffix to avoid catching unrelated paths.
+
+   Belt-and-braces over the category rule above: catches the
+   brand even if its `topup_type` ever changes in the database
+   (e.g. moving Apple Gift Card from ENTERTAINMENT=21 to GIFTCARD
+   would otherwise re-expose it).
+
+   Same `.dsim-native-ios` client-side gate as the rules above;
+   see the rationale in that block.
+   ============================================================ */
+
+.in-native-app.dsim-native-ios a[href*="-applegiftcard/"],
+.in-native-app.dsim-native-ios a[href*="-itunes/"],
+.in-native-app.dsim-native-ios a[href*="-itunesusstore/"],
+.in-native-app.dsim-native-ios a[href*="-googleplay/"],
+.in-native-app.dsim-native-ios a[href*="-googleplayus/"],
+.in-native-app.dsim-native-ios li:has(a[href*="-applegiftcard/"]),
+.in-native-app.dsim-native-ios li:has(a[href*="-itunes/"]),
+.in-native-app.dsim-native-ios li:has(a[href*="-itunesusstore/"]),
+.in-native-app.dsim-native-ios li:has(a[href*="-googleplay/"]),
+.in-native-app.dsim-native-ios li:has(a[href*="-googleplayus/"]) {
+  display: none !important;
+}
+
+/* ============================================================
+   BODY PADDING ADJUSTMENT
+   ============================================================ */
+
+.in-native-app body {
+  padding-top: 0 !important;
+  padding-bottom: 100px !important;
+}

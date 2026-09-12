@@ -1,0 +1,879 @@
+/**
+ * doctorSIM Page Hydration System
+ *
+ * Handles async loading of session state for statically cached pages.
+ * Enables pages to be served from CDN cache and hydrated with user-specific
+ * data via JavaScript.
+ *
+ * @author Claude Code
+ * @version 1.0.0
+ *
+ * Usage:
+ *   dsimHydration.init({ pageType: 'home', lang: 'en' });
+ *   dsimHydration.onReady(function(state) {
+ *     console.log('User logged in:', state.auth.is_logged_in);
+ *   });
+ *
+ * DOM Attributes:
+ *   data-hydrate="path"              - Text content from state (e.g., "auth.email")
+ *   data-hydrate-show="path"         - Show element if truthy (e.g., "auth.is_logged_in")
+ *   data-hydrate-hide="path"         - Hide element if truthy
+ *   data-hydrate-class="className"   - Add class if condition met
+ *   data-hydrate-condition="path"    - Condition path for class (used with data-hydrate-class)
+ *   data-hydrate-value="path"        - Set input value from state
+ *   data-hydrate-format="type"       - Format value (currency, credit, date)
+ *   data-hydrate-default="value"     - Default value if path is null
+ */
+var dsimHydration = (function() {
+    'use strict';
+
+    // Configuration
+    var _config = {
+        endpoint: '/proc/p.php',
+        timeout: 15000,
+        retryAttempts: 2,
+        retryDelay: 1000,
+        debug: false
+    };
+
+    // Internal state
+    var _state = null;
+    var _callbacks = [];
+    var _isLoading = false;
+    var _isLoaded = false;
+    var _loadError = null;
+    var _retryCount = 0;
+
+    /**
+     * Get nested value from object using dot notation path
+     * @param {Object} obj - Source object
+     * @param {string} path - Dot notation path (e.g., "auth.email")
+     * @returns {*} Value at path or null
+     */
+    function _getNestedValue(obj, path) {
+        if (!obj || !path) return null;
+
+        var parts = path.split('.');
+        var current = obj;
+
+        for (var i = 0; i < parts.length; i++) {
+            if (current === null || current === undefined) {
+                return null;
+            }
+            current = current[parts[i]];
+        }
+
+        return current;
+    }
+
+    /**
+     * Format value based on format type
+     * @param {*} value - Value to format
+     * @param {string} format - Format type (currency, credit, date)
+     * @returns {string} Formatted value
+     */
+    function _formatValue(value, format) {
+        if (value === null || value === undefined) return '';
+
+        switch (format) {
+            case 'currency':
+            case 'credit':
+                var num = parseFloat(value);
+                if (isNaN(num)) return value;
+                if (num === 0) return '';
+                return num.toFixed(2);
+
+            case 'credit-display':
+                var num = parseFloat(value);
+                if (isNaN(num) || num === 0) return '';
+                return '(' + num.toFixed(0) + ')';
+
+            case 'date':
+                try {
+                    var date = new Date(value);
+                    return date.toLocaleDateString();
+                } catch (e) {
+                    return value;
+                }
+
+            case 'email-truncate':
+                var str = String(value);
+                return str.length > 22 ? str.substring(0, 22) + '...' : str;
+
+            default:
+                return String(value);
+        }
+    }
+
+    /**
+     * Log debug message if debug mode is enabled
+     * @param {...*} args - Arguments to log
+     */
+    function _log() {
+        if (_config.debug && window.console && window.console.log) {
+            var args = Array.prototype.slice.call(arguments);
+            args.unshift('[dsimHydration]');
+            console.log.apply(console, args);
+        }
+    }
+
+    /**
+     * Fetch hydration state from server
+     * @param {Object} options - Request options
+     * @returns {jQuery.Deferred} Promise
+     */
+    function _fetchState(options) {
+        var deferred = $.Deferred();
+
+        var postData = {
+            act: 'get_hydration_state',
+            page_type: options.pageType || 'home'
+        };
+
+        if (options.lang) {
+            postData.lang = options.lang;
+        }
+        if (options.operId) {
+            postData.oper_id = options.operId;
+        }
+        if (options.countryCode) {
+            postData.country_code = options.countryCode;
+        }
+
+        _log('Fetching hydration state:', postData);
+
+        $.ajax({
+            url: _config.endpoint,
+            type: 'POST',
+            data: postData,
+            dataType: 'json',
+            timeout: _config.timeout,
+            success: function(data) {
+                _log('Hydration state received:', data);
+                deferred.resolve(data);
+            },
+            error: function(xhr, status, error) {
+                _log('Hydration request failed:', status, error);
+                deferred.reject({
+                    status: status,
+                    error: error,
+                    xhr: xhr
+                });
+            }
+        });
+
+        return deferred.promise();
+    }
+
+    /**
+     * Hydrate text content elements
+     */
+    function _hydrateText() {
+        $('[data-hydrate]').each(function() {
+            var $el = $(this);
+            var path = $el.attr('data-hydrate');
+            var value = _getNestedValue(_state, path);
+            var defaultVal = $el.attr('data-hydrate-default') || '';
+            var format = $el.attr('data-hydrate-format');
+            var template = $el.attr('data-hydrate-template');
+
+            if (value !== null && value !== undefined && value !== '') {
+                var formattedValue = _formatValue(value, format);
+
+                // Handle template substitution (e.g., "Hello sust_name" -> "Hello John")
+                if (template) {
+                    formattedValue = template.replace(/sust_name/g, formattedValue);
+                }
+
+                $el.text(formattedValue);
+            } else if (defaultVal) {
+                $el.text(defaultVal);
+            }
+        });
+    }
+
+    /**
+     * Hydrate visibility (show/hide) elements
+     * Handles elements with data-hydrate-show, data-hydrate-hide, or BOTH
+     * When both are present: show if show-condition is TRUE AND hide-condition is FALSE
+     */
+    function _hydrateVisibility() {
+        // Handle elements that have BOTH show and hide attributes
+        // Logic: visible = showCondition AND NOT hideCondition
+        $('[data-hydrate-show][data-hydrate-hide]').each(function() {
+            var $el = $(this);
+            var showPath = $el.attr('data-hydrate-show');
+            var hidePath = $el.attr('data-hydrate-hide');
+            var showValue = _getNestedValue(_state, showPath);
+            var hideValue = _getNestedValue(_state, hidePath);
+
+            // Show only if show condition is true AND hide condition is false
+            if (showValue && !hideValue) {
+                $el.show();
+            } else {
+                $el.hide();
+            }
+        });
+
+        // Handle data-hydrate-show only (no hide attribute)
+        $('[data-hydrate-show]:not([data-hydrate-hide])').each(function() {
+            var $el = $(this);
+            var path = $el.attr('data-hydrate-show');
+            var value = _getNestedValue(_state, path);
+
+            if (value) {
+                $el.show();
+            } else {
+                $el.hide();
+            }
+        });
+
+        // Handle data-hydrate-hide only (no show attribute)
+        $('[data-hydrate-hide]:not([data-hydrate-show])').each(function() {
+            var $el = $(this);
+            var path = $el.attr('data-hydrate-hide');
+            var value = _getNestedValue(_state, path);
+
+            if (value) {
+                $el.hide();
+            } else {
+                $el.show();
+            }
+        });
+    }
+
+    /**
+     * Hydrate CSS classes
+     */
+    function _hydrateClasses() {
+        $('[data-hydrate-class]').each(function() {
+            var $el = $(this);
+            var className = $el.attr('data-hydrate-class');
+            var conditionPath = $el.attr('data-hydrate-condition');
+
+            if (!conditionPath) return;
+
+            var value = _getNestedValue(_state, conditionPath);
+
+            if (value) {
+                $el.addClass(className);
+            } else {
+                $el.removeClass(className);
+            }
+        });
+    }
+
+    /**
+     * Hydrate input values
+     */
+    function _hydrateInputs() {
+        $('[data-hydrate-value]').each(function() {
+            var $el = $(this);
+            var path = $el.attr('data-hydrate-value');
+            var value = _getNestedValue(_state, path);
+
+            if (value !== null && value !== undefined && value !== '') {
+                $el.val(value);
+            }
+        });
+    }
+
+    /**
+     * Dynamically load the CookieScript consent banner for EU users.
+     * Skipped on URL patterns that should never show the banner.
+     */
+    function _loadCookieScript() {
+        if (document.getElementById('dsim-cookiescript') || document.getElementById('dsim-cookiescript-eu')) {
+            return;
+        }
+
+        var href = window.location.href;
+        if (href.indexOf('destcountries') !== -1 ||
+            href.indexOf('login.html?embed=1&prel=login') !== -1) {
+            _log('Skipping CookieScript for excluded URL');
+            return;
+        }
+
+        if (document.documentElement.classList.contains('in-native-app')) {
+            window.CookieScript = {
+                instance: {
+                    currentState: function() { return { action: 'accept' }; },
+                    show: function() {},
+                    hide: function() {},
+                    acceptAllAction: function() {}
+                }
+            };
+            _log('Native app mode: CookieScript bypassed, consent assumed');
+            return;
+        }
+
+        function appendCookieScript(id, src) {
+            if (document.getElementById(id)) {
+                return;
+            }
+            var s = document.createElement('script');
+            s.id = id;
+            s.setAttribute('data-cfasync', 'false');
+            s.charset = 'UTF-8';
+            s.src = src;
+            (document.head || document.documentElement).appendChild(s);
+        }
+
+        // mydev3: isolated EU explicit test widget only.
+        // Prod: EU geo banner first, ROW global implied banner last (CookieScript requirement).
+        if (window.location.hostname === 'mydev3.doctorsim.com') {
+            appendCookieScript('dsim-cookiescript', '//cdn.cookie-script.com/s/35fde76a4b32f6a0ed6a8cf8ca5ad25d.js');
+        } else {
+            appendCookieScript('dsim-cookiescript-eu', '//geo.cookie-script.com/s/69b69794ad7d17f149945e8a6664d063.js?country=gb-ch&region=eu');
+            appendCookieScript('dsim-cookiescript-row', '//cdn.cookie-script.com/s/35fde76a4b32f6a0ed6a8cf8ca5ad25d.js');
+        }
+        _log('CookieScript injected dynamically');
+    }
+
+    /**
+     * Notify native app of auth state so it can identify/deidentify the user
+     * in Customer.io for push notifications.
+     */
+    function _notifyNativeAppAuth() {
+        if (!window.doctorSIMNative || !window.doctorSIMNative.isNativeApp) {
+            _log('NativeAppAuth: not in native app, skipping');
+            return;
+        }
+        if (!_state || !_state.auth) {
+            _log('NativeAppAuth: no state or auth data');
+            return;
+        }
+
+        _log('NativeAppAuth: is_logged_in=' + _state.auth.is_logged_in +
+             ' email=' + (_state.auth.email || 'null') +
+             ' mid=' + (_state.auth.mid || 'null'));
+
+        if (_state.auth.is_logged_in && _state.auth.email) {
+            var name = '';
+            if (_state.auth.first_name) {
+                name = _state.auth.first_name;
+                if (_state.auth.last_name) {
+                    name += ' ' + _state.auth.last_name;
+                }
+            }
+            var cioId = String(_state.auth.mid || _state.auth.email);
+            var sent = window.doctorSIMNative.sendUserIdentified(cioId, {
+                email: _state.auth.email,
+                name: name,
+                mid: _state.auth.mid
+            });
+            _log('NativeAppAuth: USER_IDENTIFIED sent=' + sent + ' cioId=' + cioId + ' email=' + _state.auth.email);
+        } else {
+            _log('NativeAppAuth: user not logged in, no message sent');
+        }
+    }
+
+    /**
+     * Run all hydration methods
+     */
+    function _hydrateDOM() {
+        if (!_state) {
+            _log('Cannot hydrate: state is null');
+            return;
+        }
+
+        _log('Hydrating DOM');
+
+        // Mark start time for performance tracking
+        if (window.performance && window.performance.mark) {
+            performance.mark('dsim-hydration-start');
+        }
+
+        _hydrateText();
+        _hydrateVisibility();
+        _hydrateClasses();
+        _hydrateInputs();
+
+        if (_state && _state.geo && _state.geo.is_eu) {
+            _loadCookieScript();
+        }
+
+        _notifyNativeAppAuth();
+
+        $(document).trigger('dsimHydrationComplete', [_state]);
+
+        // Mark end time for performance tracking
+        if (window.performance && window.performance.mark) {
+            performance.mark('dsim-hydration-end');
+            performance.measure('dsim-hydration', 'dsim-hydration-start', 'dsim-hydration-end');
+        }
+
+        _log('Hydration complete');
+    }
+
+    /**
+     * Execute all registered callbacks
+     */
+    function _executeCallbacks() {
+        for (var i = 0; i < _callbacks.length; i++) {
+            try {
+                _callbacks[i](_state);
+            } catch (e) {
+                _log('Callback error:', e);
+            }
+        }
+    }
+
+    /**
+     * Handle fetch failure with retry logic
+     * @param {Object} error - Error object
+     * @param {Object} options - Original request options
+     */
+    function _handleFetchError(error, options) {
+        _retryCount++;
+
+        if (_retryCount < _config.retryAttempts) {
+            _log('Retrying fetch (attempt ' + (_retryCount + 1) + ')');
+            setTimeout(function() {
+                _doFetch(options);
+            }, _config.retryDelay);
+        } else {
+            _log('Max retry attempts reached, using fallback state');
+            _loadError = error;
+            _isLoading = false;
+            _isLoaded = true;
+
+            // Create fallback anonymous state
+            _state = {
+                status: 'error',
+                auth: {
+                    is_logged_in: false,
+                    mid: null,
+                    email: null,
+                    first_name: null,
+                    credito: 0,
+                    is_pro: false
+                },
+                geo: {
+                    ip_country: null,
+                    show_geo_warning: false
+                },
+                cookies: {
+                    pdo: null,
+                    lang: null,
+                    cur: null,
+                    destc: null
+                },
+                session: {
+                    nav_token: null,
+                    msisdn: null
+                },
+                promo: {
+                    zero_fee_active: false
+                },
+                ui: {
+                    override_ua: null
+                }
+            };
+
+            _hydrateDOM();
+            _executeCallbacks();
+        }
+    }
+
+    /**
+     * Perform the actual fetch operation
+     * @param {Object} options - Request options
+     */
+    function _doFetch(options) {
+        _fetchState(options)
+            .done(function(data) {
+                _state = data;
+                _isLoading = false;
+                _isLoaded = true;
+                _hydrateDOM();
+                _executeCallbacks();
+            })
+            .fail(function(error) {
+                _handleFetchError(error, options);
+            });
+    }
+
+    // Public API
+    return {
+        /**
+         * Initialize hydration system
+         * @param {Object} options - Configuration options
+         * @param {string} options.pageType - Type of page (home, topup_landing, giftcard_landing, product)
+         * @param {string} [options.lang] - Language code
+         * @param {number} [options.operId] - Operator ID (for product pages)
+         * @param {string} [options.countryCode] - Country code
+         * @param {boolean} [options.debug] - Enable debug logging
+         */
+        init: function(options) {
+            options = options || {};
+
+            if (options.debug !== undefined) {
+                _config.debug = options.debug;
+            }
+
+            _log('Initializing with options:', options);
+
+            if (_isLoading) {
+                _log('Already loading, skipping');
+                return;
+            }
+
+            if (_isLoaded && _state) {
+                _log('Already loaded, re-hydrating');
+                _hydrateDOM();
+                return;
+            }
+
+            _isLoading = true;
+            _retryCount = 0;
+            _doFetch(options);
+        },
+
+        /**
+         * Register callback for when state is ready
+         * @param {Function} callback - Function to call with state
+         */
+        onReady: function(callback) {
+            if (typeof callback !== 'function') {
+                _log('onReady: callback must be a function');
+                return;
+            }
+
+            if (_isLoaded && _state) {
+                // Already loaded, execute immediately
+                try {
+                    callback(_state);
+                } catch (e) {
+                    _log('Callback error:', e);
+                }
+            } else {
+                // Queue for later execution
+                _callbacks.push(callback);
+            }
+        },
+
+        /**
+         * Get current hydration state
+         * @returns {Object|null} Current state or null if not loaded
+         */
+        getState: function() {
+            return _state;
+        },
+
+        /**
+         * Check if user is logged in
+         * @returns {boolean}
+         */
+        isLoggedIn: function() {
+            return _state && _state.auth && _state.auth.is_logged_in;
+        },
+
+        /**
+         * Check if user is a PRO user
+         * @returns {boolean}
+         */
+        isPro: function() {
+            return _state && _state.auth && _state.auth.is_pro;
+        },
+
+        /**
+         * Get user email
+         * @returns {string|null}
+         */
+        getEmail: function() {
+            return _state && _state.auth ? _state.auth.email : null;
+        },
+
+        /**
+         * Get user credit balance
+         * @returns {number}
+         */
+        getCredito: function() {
+            return _state && _state.auth ? _state.auth.credito : 0;
+        },
+
+        /**
+         * Get nav token for forms
+         * @returns {string|null}
+         */
+        getNavToken: function() {
+            return _state && _state.session ? _state.session.nav_token : null;
+        },
+
+        /**
+         * Generic getter for any state property using dot notation
+         * @param {string} path - Dot-separated path to the property (e.g., 'auth.email', 'session.msisdn')
+         * @returns {*} The value at the path, or null if not found
+         */
+        get: function(path) {
+            if (!_state || !path) return null;
+            
+            var parts = path.split('.');
+            var current = _state;
+            
+            for (var i = 0; i < parts.length; i++) {
+                if (current === null || current === undefined) return null;
+                current = current[parts[i]];
+            }
+            
+            return current !== undefined ? current : null;
+        },
+
+        /**
+         * Get MSISDN (phone number) from user profile
+         * @returns {string|null}
+         */
+        getMsisdn: function() {
+            return _state && _state.session ? _state.session.msisdn : null;
+        },
+
+        /**
+         * Get topup MSISDN for pre-populating the phone input
+         * This resolves from multiple sources: topup_msisdn, checkout data, reminder, user profile
+         * @returns {string|null}
+         */
+        getTopupMsisdn: function() {
+            return _state && _state.session ? _state.session.topup_msisdn : null;
+        },
+
+        /**
+         * Check if zero fee promo is active
+         * @returns {boolean}
+         */
+        isZeroFeeActive: function() {
+            return _state && _state.promo && _state.promo.zero_fee_active;
+        },
+
+        /**
+         * Get zero fee end datetime
+         * @returns {string|null}
+         */
+        getZeroFeeEndTime: function() {
+            return _state && _state.promo ? _state.promo.zero_fee_end_datetime : null;
+        },
+
+        /**
+         * Get value at path from state
+         * @param {string} path - Dot notation path
+         * @returns {*} Value at path or null
+         */
+        getValue: function(path) {
+            return _getNestedValue(_state, path);
+        },
+
+        /**
+         * Force refresh of hydration state
+         * @param {Object} [options] - New options for fetch
+         */
+        refresh: function(options) {
+            _isLoaded = false;
+            _isLoading = false;
+            _state = null;
+            _callbacks = [];
+            this.init(options || {});
+        },
+
+        /**
+         * Manually trigger DOM hydration
+         * Useful after dynamic content is added
+         */
+        hydrate: function() {
+            if (_state) {
+                _hydrateDOM();
+            }
+        },
+
+        /**
+         * Check if hydration is complete
+         * @returns {boolean}
+         */
+        isReady: function() {
+            return _isLoaded && _state !== null;
+        },
+
+        /**
+         * Check if user is in the EU (GDPR scope)
+         * @returns {boolean}
+         */
+        isEU: function() {
+            return !!(_state && _state.geo && _state.geo.is_eu);
+        },
+
+        /**
+         * Get any load error that occurred
+         * @returns {Object|null}
+         */
+        getError: function() {
+            return _loadError;
+        },
+
+        /**
+         * Enable/disable debug mode
+         * @param {boolean} enabled
+         */
+        setDebug: function(enabled) {
+            _config.debug = !!enabled;
+        },
+
+        /**
+         * Get user's preferred country from cookies
+         * @returns {string|null} PDO cookie value (e.g., "mx", "us-en")
+         */
+        getCookieCountry: function() {
+            return _state && _state.cookies ? _state.cookies.pdo : null;
+        },
+
+        /**
+         * Get user's preferred language from cookies
+         * @returns {string|null} Language cookie value (e.g., "en", "es")
+         */
+        getCookieLang: function() {
+            return _state && _state.cookies ? _state.cookies.lang : null;
+        },
+
+        /**
+         * Get user's preferred currency from cookies
+         * @returns {string|null} Currency cookie value (e.g., "EUR", "USD")
+         */
+        getCookieCurrency: function() {
+            return _state && _state.cookies ? _state.cookies.cur : null;
+        },
+
+        /**
+         * Get user's destination country from cookies
+         * @returns {string|null} Destination country cookie value
+         */
+        getCookieDestCountry: function() {
+            return _state && _state.cookies ? _state.cookies.destc : null;
+        },
+
+        /**
+         * Set a cookie (client-side)
+         * @param {string} name - Cookie name
+         * @param {string} value - Cookie value
+         * @param {number} [days=365] - Days until expiration
+         * @param {string} [path='/'] - Cookie path
+         */
+        setCookie: function(name, value, days, path) {
+            days = days || 365;
+            path = path || '/';
+            var expires = new Date();
+            expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+            var domainPart = '';
+            if (typeof window.DSIM_COOKIE_DOMAIN !== 'undefined' &&
+                window.DSIM_COOKIE_DOMAIN &&
+                window.DSIM_COOKIE_DOMAIN !== 'false') {
+                domainPart = ';domain=' + window.DSIM_COOKIE_DOMAIN;
+            }
+            document.cookie = name + '=' + encodeURIComponent(value) +
+                ';expires=' + expires.toUTCString() +
+                ';path=' + path +
+                domainPart +
+                ';secure;samesite=lax';
+        },
+
+        /**
+         * Get a cookie value directly from document.cookie
+         * @param {string} name - Cookie name
+         * @returns {string|null} Cookie value or null
+         */
+        readCookie: function(name) {
+            var nameEQ = name + '=';
+            var ca = document.cookie.split(';');
+            for (var i = 0; i < ca.length; i++) {
+                var c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) {
+                    return decodeURIComponent(c.substring(nameEQ.length, c.length));
+                }
+            }
+            return null;
+        },
+
+        /**
+         * Clear MSISDN from the cached hydration state
+         * Called when destination country changes to prevent stale data
+         * The server-side session is already cleared via set_country_close_modal_geo_warning
+         */
+        clearMsisdn: function() {
+            if (_state && _state.session) {
+                _state.session.msisdn = null;
+                _log('Cleared MSISDN from hydration state');
+            }
+        },
+
+        /**
+         * Clear a session variable from the cached hydration state
+         * @param {string} varName - The session variable name to clear (e.g., 'msisdn', 'dest_country')
+         */
+        clearSessionVar: function(varName) {
+            if (_state && _state.session && typeof _state.session[varName] !== 'undefined') {
+                _state.session[varName] = null;
+                _log('Cleared session.' + varName + ' from hydration state');
+            }
+        },
+
+        /**
+         * Unset a server-side session variable via AJAX and clear it from local state
+         * @param {string} varName - The session variable name to unset
+         * @param {Function} [callback] - Optional callback after server responds
+         */
+        unsetSessionVar: function(varName, callback) {
+            var self = this;
+            
+            // Clear from local state immediately
+            this.clearSessionVar(varName);
+            
+            // Also call server to unset the session variable
+            $.post(
+                _config.endpoint,
+                {
+                    act: 'unset_session_var',
+                    var_name: varName
+                }
+            ).done(function(data) {
+                _log('Server unset session.' + varName);
+                if (typeof callback === 'function') {
+                    callback(true, data);
+                }
+            }).fail(function() {
+                _log('Failed to unset session.' + varName + ' on server');
+                if (typeof callback === 'function') {
+                    callback(false);
+                }
+            });
+        },
+
+        /**
+         * Get the user's preferred language from cookies
+         * Returns combined pref_lang + locale (e.g., 'en-us', 'es-es') or just pref_lang
+         * @returns {string|null} Combined language code or null if not set
+         */
+        getPrefLang: function() {
+            if (!_state || !_state.cookies) return null;
+            
+            var prefLang = _state.cookies.pref_lang;
+            var locale = _state.cookies.locale;
+            
+            if (!prefLang) return null;
+            
+            // Combine for valid locale combinations: en-us and es-es
+            if (prefLang === 'en' && locale === 'us') {
+                return 'en-us';
+            } else if (prefLang === 'es' && locale === 'es') {
+                return 'es-es';
+            }
+            
+            return prefLang;
+        },
+
+        /**
+         * Get the locale cookie value
+         * @returns {string|null} Locale value (e.g., 'us', 'es') or null
+         */
+        getLocale: function() {
+            return _state && _state.cookies ? _state.cookies.locale : null;
+        }
+    };
+})();

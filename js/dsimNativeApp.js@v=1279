@@ -1,0 +1,193 @@
+/**
+ * doctorSIM Native App Bridge
+ *
+ * Detects when the website is running inside the native app WebView
+ * and provides a postMessage bridge for native <-> web communication.
+ *
+ * Detection methods:
+ *   1. window.__DOCTORSIM_NATIVE_APP__ flag (set by injected JS)
+ *   2. User-Agent containing "doctorSIMApp"
+ *
+ * @version 1.0.0
+ */
+(function() {
+    'use strict';
+
+    var isNativeApp = (
+        window.__DOCTORSIM_NATIVE_APP__ === true ||
+        (navigator.userAgent && navigator.userAgent.indexOf('doctorSIMApp') !== -1) ||
+        document.documentElement.classList.contains('in-native-app')
+    );
+
+    if (!isNativeApp) {
+        return;
+    }
+
+    document.documentElement.classList.add('in-native-app');
+
+    var appVersion = window.__DOCTORSIM_APP_VERSION__ || 'unknown';
+    var appPlatform = window.__DOCTORSIM_PLATFORM__ || 'unknown';
+
+    function postToNative(message) {
+        if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+            var json = JSON.stringify(message);
+            console.log('[dsimNativeApp] postToNative:', message.type, json.substring(0, 200));
+            window.ReactNativeWebView.postMessage(json);
+            return true;
+        }
+        console.log('[dsimNativeApp] postToNative FAILED: ReactNativeWebView not available, type=' + message.type);
+        return false;
+    }
+
+    function sendAuthToNative(token) {
+        return postToNative({
+            type: 'AUTH_TOKEN',
+            token: token
+        });
+    }
+
+    function sendLogoutToNative() {
+        return postToNative({
+            type: 'LOGOUT'
+        });
+    }
+
+    function sendOrderComplete(orderId) {
+        return postToNative({
+            type: 'ORDER_COMPLETE',
+            orderId: orderId
+        });
+    }
+
+    function sendShareToNative(url, title) {
+        return postToNative({
+            type: 'SHARE',
+            url: url,
+            title: title || document.title
+        });
+    }
+
+    function sendLanguageChanged(locale) {
+        return postToNative({
+            type: 'LANGUAGE_CHANGED',
+            locale: locale
+        });
+    }
+
+    function requestPushToken() {
+        return postToNative({
+            type: 'PUSH_TOKEN_NEEDED'
+        });
+    }
+
+    function sendUserIdentified(cioId, attrs) {
+        var msg = {
+            type: 'USER_IDENTIFIED',
+            cioId: cioId
+        };
+        if (attrs) {
+            if (attrs.email) msg.email = attrs.email;
+            if (attrs.name) msg.name = attrs.name;
+            if (attrs.mid) msg.mid = attrs.mid;
+        }
+        return postToNative(msg);
+    }
+
+    window.addEventListener('message', function(event) {
+        try {
+            var data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
+
+            if (data && data.type === 'PUSH_TOKEN') {
+                if (typeof window.registerPushToken === 'function') {
+                    window.registerPushToken(data.token);
+                }
+            }
+        } catch (e) {
+            // Ignore non-JSON messages from other sources
+        }
+    });
+
+    /**
+     * Inject hidden inputs with client_source / app_platform / app_version /
+     * app_build into the given form (jQuery collection or plain DOM <form>).
+     *
+     * Used by checkout flows (`js/tp_checkout.js` and the inline handler in
+     * `templates/recargas_stripe_elements_js.php`) so that the IPN handler
+     * (`pp_ipn/order.php`) can persist the source even on payment provider
+     * POST-back round trips that drop our custom HTTP headers.
+     *
+     * Re-runnable: removes any previously injected inputs first so a user
+     * who navigates back via BFCache and re-submits doesn't end up with
+     * duplicate fields.
+     */
+    function populateOrderSourceFields(form) {
+        if (!form) { return; }
+
+        var clientSource = appPlatform === 'ios' ? 'ios_app'
+                         : appPlatform === 'android' ? 'android_app'
+                         : 'unknown';
+
+        var fields = {
+            client_source: clientSource,
+            app_platform: appPlatform || '',
+            app_version: appVersion || '',
+            app_build: window.__DOCTORSIM_APP_BUILD__ || ''
+        };
+
+        if (typeof window.jQuery !== 'undefined' && form.jquery) {
+            var $form = form;
+            $form.find('input.dsim-native-source-field').remove();
+            for (var key in fields) {
+                if (!Object.prototype.hasOwnProperty.call(fields, key)) { continue; }
+                var $input = window.jQuery('<input>', {
+                    type: 'hidden',
+                    'class': 'dsim-native-source-field',
+                    name: key,
+                    value: fields[key]
+                });
+                $form.append($input);
+            }
+            return;
+        }
+
+        var formEl = form.nodeType === 1 ? form : null;
+        if (!formEl) { return; }
+        var existing = formEl.querySelectorAll('input.dsim-native-source-field');
+        for (var i = 0; i < existing.length; i++) {
+            existing[i].parentNode.removeChild(existing[i]);
+        }
+        for (var name in fields) {
+            if (!Object.prototype.hasOwnProperty.call(fields, name)) { continue; }
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.className = 'dsim-native-source-field';
+            input.name = name;
+            input.value = fields[name];
+            formEl.appendChild(input);
+        }
+    }
+
+    function getAppContext() {
+        return {
+            platform: appPlatform || '',
+            version: appVersion || '',
+            build: window.__DOCTORSIM_APP_BUILD__ || ''
+        };
+    }
+
+    window.doctorSIMNative = {
+        isNativeApp: true,
+        appVersion: appVersion,
+        platform: appPlatform,
+        sendAuth: sendAuthToNative,
+        sendLogout: sendLogoutToNative,
+        sendUserIdentified: sendUserIdentified,
+        sendOrderComplete: sendOrderComplete,
+        sendShare: sendShareToNative,
+        sendLanguageChanged: sendLanguageChanged,
+        requestPushToken: requestPushToken,
+        populateOrderSourceFields: populateOrderSourceFields,
+        getAppContext: getAppContext
+    };
+
+})();

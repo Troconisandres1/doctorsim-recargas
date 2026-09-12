@@ -1,0 +1,158 @@
+/**
+ * WebMCP progressive enhancement — exposes site tools to agent browsers.
+ * ES5-safe; feature-detects document.modelContext (Chrome 150+) and
+ * navigator.modelContext (earlier WebMCP previews).
+ */
+(function() {
+    var modelContext = null;
+    if (typeof document !== 'undefined' && document.modelContext) {
+        modelContext = document.modelContext;
+    } else if (typeof navigator !== 'undefined' && navigator.modelContext) {
+        modelContext = navigator.modelContext;
+    }
+
+    if (!modelContext || typeof modelContext.registerTool !== 'function') {
+        return;
+    }
+
+    function resolveAgenticBases() {
+        var host = (window.location.hostname || '').toLowerCase();
+        var origin = window.location.protocol + '//' + window.location.host;
+
+        if (host === 'www.doctorsim.com' || host === 'doctorsim.com') {
+            return {
+                wwwBase: 'https://www.doctorsim.com',
+                apiBase: 'https://api.doctorsim.com/v2'
+            };
+        }
+
+        if (host === 'api.doctorsim.com') {
+            return {
+                wwwBase: 'https://www.doctorsim.com',
+                apiBase: 'https://api.doctorsim.com/v2'
+            };
+        }
+
+        return {
+            wwwBase: origin,
+            apiBase: origin + '/v2'
+        };
+    }
+
+    var bases = resolveAgenticBases();
+    var wwwBase = bases.wwwBase;
+    var apiBase = bases.apiBase;
+
+    function findHref(selectors) {
+        var i;
+        for (i = 0; i < selectors.length; i++) {
+            var el = document.querySelector(selectors[i]);
+            if (el && el.href) {
+                return el.href;
+            }
+        }
+        return null;
+    }
+
+    function registerTool(toolDef) {
+        try {
+            modelContext.registerTool(toolDef);
+        } catch (e) {
+            /* browser may reject duplicate registration */
+        }
+    }
+
+    function mcpTextResult(obj) {
+        return {
+            content: [{
+                type: 'text',
+                text: JSON.stringify(obj, null, 2)
+            }]
+        };
+    }
+
+    registerTool({
+        name: 'get_agent_commerce_links',
+        description: 'Return doctorSIM agent discovery URLs (API catalog, OAuth, OpenAPI, MCP card, skills index).',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            additionalProperties: false
+        },
+        execute: function() {
+            return mcpTextResult({
+                apiCatalog: wwwBase + '/.well-known/api-catalog',
+                authGuide: wwwBase + '/auth.md',
+                openapi: wwwBase + '/api-docs/openapi.yaml',
+                apiExplorer: wwwBase + '/api-docs/',
+                oauthAuthorizationServer: wwwBase + '/.well-known/oauth-authorization-server',
+                oauthProtectedResource: apiBase.replace(/\/v2\/?$/, '') + '/.well-known/oauth-protected-resource/v2',
+                mcpServerCard: wwwBase + '/.well-known/mcp/server-card.json',
+                agentSkillsIndex: wwwBase + '/.well-known/agent-skills/index.json',
+                apiStatus: apiBase + '/status'
+            });
+        },
+        annotations: { readOnlyHint: true }
+    });
+
+    var rechargeUrl = findHref([
+        'a[href*="recargar"]',
+        'a[href*="topup"]',
+        'a[href*="recharge"]'
+    ]);
+    if (rechargeUrl) {
+        registerTool({
+            name: 'start_topup',
+            description: 'Navigate to the mobile top-up recharge flow on doctorSIM.',
+            inputSchema: {
+                type: 'object',
+                properties: {},
+                additionalProperties: false
+            },
+            execute: function() {
+                window.location.href = rechargeUrl;
+                return mcpTextResult({ navigatedTo: rechargeUrl });
+            }
+        });
+    }
+
+    var giftUrl = findHref([
+        'a[href*="gift"]',
+        'a[href*="tarjeta-regalo"]'
+    ]);
+    if (giftUrl) {
+        registerTool({
+            name: 'browse_gift_cards',
+            description: 'Navigate to gift card products on doctorSIM.',
+            inputSchema: {
+                type: 'object',
+                properties: {},
+                additionalProperties: false
+            },
+            execute: function() {
+                window.location.href = giftUrl;
+                return mcpTextResult({ navigatedTo: giftUrl });
+            }
+        });
+    }
+
+    var accountUrl = findHref([
+        'a[href*="mi_cuenta"]',
+        'a[href*="mi-cuenta"]'
+    ]);
+    if (accountUrl) {
+        registerTool({
+            name: 'open_my_account',
+            description: 'Open Mi Cuenta (login required for API keys and PRO credits).',
+            inputSchema: {
+                type: 'object',
+                properties: {},
+                additionalProperties: false
+            },
+            execute: function() {
+                window.location.href = accountUrl;
+                return mcpTextResult({ navigatedTo: accountUrl });
+            }
+        });
+    }
+})();
